@@ -357,6 +357,9 @@ pub const Py = struct {
         \\def wait(t):
         \\    time.sleep(t)
         \\
+        \\def split_lines(text):
+        \\    return text.splitlines()
+        \\
         \\def randint(a, b):
         \\    return random.randint(a, b)
         \\

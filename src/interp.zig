@@ -2105,6 +2105,17 @@ pub const Interpreter = struct {
                 return .{ .int = @intCast(stat.size) };
             }
         }
+        if (std.mem.startsWith(u8, expr, "splitlines(") and isWholeCall(expr, "splitlines")) {
+            const text = try self.evalExpr(expr[11 .. expr.len - 1]);
+            if (text == .string) {
+                const python = self.python orelse return .none;
+                const py_text = try python.newString(text.string);
+                defer py_mod.Py_DecRef(py_text);
+                const result = try python.callHelper("split_lines", &.{py_text});
+                defer py_mod.Py_DecRef(result);
+                return try python.fromPy(result);
+            }
+        }
         if (std.mem.startsWith(u8, expr, "dirname(") and isWholeCall(expr, "dirname")) {
             const path = try self.evalExpr(expr[8 .. expr.len - 1]);
             if (path == .string) {
