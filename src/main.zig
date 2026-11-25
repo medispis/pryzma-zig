@@ -15,6 +15,10 @@ pub fn main(init: std.process.Init.Minimal) !void {
     if (args.len > 0) {
         _ = try interpreter.setVar("interpreter_path", .{ .string = std.mem.span(args[0]) });
     }
+    if (args.len == 2 and std.mem.eql(u8, std.mem.span(args[1]), "-h")) {
+        try printCliHelp(io);
+        return;
+    }
     if (args.len <= 1) {
         if (isatty(0) != 0) {
             try runRepl(interpreter, allocator);
@@ -44,18 +48,7 @@ pub fn main(init: std.process.Init.Minimal) !void {
         if (std.mem.eql(u8, arg, "-pk") or std.mem.eql(u8, arg, "-upk")) packed_mode = arg;
     }
     if (help) {
-        try std.Io.File.stdout().writeStreamingAll(io,
-            \\flags:
-            \\    -d  debug mode
-            \\    -p  preprocess only
-            \\    -np no preprocessing
-            \\    -l  execute a single line
-            \\    -fd forward declare functions
-            \\    -pk pack a file
-            \\    -upk unpack a file
-            \\    -upi unpack and interpret a file
-            \\
-        );
+        try printCliHelp(io);
         return;
     }
     if (line_mode) {
@@ -110,6 +103,21 @@ pub fn main(init: std.process.Init.Minimal) !void {
     // Packed files are detected and unpacked by interpretFile. This flag is
     // retained for compatibility with the reference CLI.
     try interpreter.interpretFile(file, script_args.items);
+}
+
+fn printCliHelp(io: std.Io) !void {
+    try std.Io.File.stdout().writeStreamingAll(io,
+        \\flags:
+        \\    -d  debug mode
+        \\    -p  preprocess only
+        \\    -np no preprocessing
+        \\    -l  execute a single line
+        \\    -fd forward declare functions
+        \\    -pk pack a file
+        \\    -upk unpack a file
+        \\    -upi unpack and interpret a file
+        \\
+    );
 }
 
 fn runStdin(interpreter: *interp_mod.Interpreter, allocator: std.mem.Allocator) !void {

@@ -5,6 +5,15 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
 passed=0
 failed=0
+help_output="$("$bin" -h 2>&1)"
+if grep -Fq 'flags:' <<<"$help_output" && grep -Fq -- '-upi unpack and interpret a file' <<<"$help_output"; then
+    printf '[OK] CLI standalone help\n'
+    ((passed+=1))
+else
+    printf '[FAIL] CLI standalone help\n'
+    printf '%s\n' "$help_output"
+    ((failed+=1))
+fi
 for source in tests/*.pryzma; do
     name="${source%.pryzma}"
     expected="${name}.expected"
