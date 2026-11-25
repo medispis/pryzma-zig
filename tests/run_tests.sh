@@ -160,6 +160,18 @@ if command -v script >/dev/null 2>&1; then
         printf '%s\n' "$breakpoint_output"
         ((failed+=1))
     fi
+    if_debug_output="$(printf 'debug\ntests/debug_if.pryzma\ns\ns\ns\nexit\n' | script -q -c "$bin" /dev/null 2>&1)"
+    if grep -Fq 'Debug: Executing line 1: if(1==1)' <<<"$if_debug_output" &&
+       grep -Fq 'Debug: Executing line 1: print "inside branch"' <<<"$if_debug_output" &&
+       ! grep -Fq 'Debug: Executing line 0:' <<<"$if_debug_output" &&
+       grep -Fq 'Debug: Executing line 2: print "after branch"' <<<"$if_debug_output"; then
+        printf '[OK] debugger if-branch stepping and line mapping\n'
+        ((passed+=1))
+    else
+        printf '[FAIL] debugger if-branch stepping and line mapping\n'
+        printf '%s\n' "$if_debug_output"
+        ((failed+=1))
+    fi
     debug_log="$(mktemp)"
     printf 'debug\ntests/repl_debug.pryzma\nhelp\nclear\nlog\n%s\ns\nexit\n' "$debug_log" |
         script -q -c "$bin" /dev/null >/dev/null 2>&1

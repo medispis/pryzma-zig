@@ -378,15 +378,19 @@ pub const Interpreter = struct {
             var line = piece;
             if (self.main_file < 1) self.no_preproc = false;
             self.main_file -= 1;
+            const previous_line = self.current_line;
             if (!self.in_func.items[self.in_func.items.len - 1]) self.current_line = 0;
 
+            var has_line_match = false;
             for (self.lines_map.items, 0..) |entry, idx| {
                 if (entry.text.len != 0 and std.mem.startsWith(u8, line, entry.text)) {
                     if (!self.in_loop) _ = self.lines_map.orderedRemove(idx);
                     self.current_line = entry.num + 1;
+                    has_line_match = true;
                     break;
                 }
             }
+            if (self.debug and !has_line_match) self.current_line = previous_line;
             line = std.mem.trim(u8, line, " \t\r\n");
             if (line.len == 0 or std.mem.startsWith(u8, line, "//")) continue;
             if (self.debug) try self.debugPrompt(line);
