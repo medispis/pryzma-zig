@@ -2156,6 +2156,19 @@ pub const Interpreter = struct {
             if (paths.items.len == 0) return .{ .string = "" };
             return .{ .string = try std.fs.path.join(self.allocator, paths.items) };
         }
+        if (std.mem.startsWith(u8, expr, "list_dir(") and isWholeCall(expr, "list_dir")) {
+            const path = try self.evalExpr(expr[9 .. expr.len - 1]);
+            if (path == .string) {
+                const dir = std.Io.Dir.cwd().openDir(self.io, path.string, .{ .iterate = true }) catch return .none;
+                defer dir.close(self.io);
+                var entries = dir.iterate();
+                const result = try value.List.create(self.allocator);
+                while (try entries.next(self.io)) |entry| {
+                    try result.append(.{ .string = try self.dup(entry.name) });
+                }
+                return .{ .list = result };
+            }
+        }
         if (std.mem.startsWith(u8, expr, "startswith(") and expr[expr.len - 1] == ')') {
             const a = try self.splitArgs(expr[11 .. expr.len - 1]);
             if (a.len == 2) {
