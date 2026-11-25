@@ -1,0 +1,4 @@
+disablekeyword("print")
+print "blocked"
+enablekeyword("print")
+print "enabled"

@@ -560,6 +560,24 @@ pub const Interpreter = struct {
         } else if (std.mem.startsWith(u8, line, "delfunc(") and line[line.len - 1] == ')') {
             const target = try self.evalExpr(line[8 .. line.len - 1]);
             if (target == .string) _ = self.functions.remove(target.string);
+        } else if (std.mem.startsWith(u8, line, "disablekeyword(") and line[line.len - 1] == ')') {
+            const args = try self.splitArgs(line[15 .. line.len - 1]);
+            for (args) |arg| {
+                const keyword = try self.evalExpr(arg);
+                if (keyword == .string) try self.deleted_keywords.append(self.allocator, try self.dup(keyword.string));
+            }
+        } else if (std.mem.startsWith(u8, line, "enablekeyword(") and line[line.len - 1] == ')') {
+            const args = try self.splitArgs(line[14 .. line.len - 1]);
+            for (args) |arg| {
+                const keyword = try self.evalExpr(arg);
+                if (keyword != .string) continue;
+                for (self.deleted_keywords.items, 0..) |disabled, index| {
+                    if (std.mem.eql(u8, disabled, keyword.string)) {
+                        _ = self.deleted_keywords.orderedRemove(index);
+                        break;
+                    }
+                }
+            }
         } else if (std.mem.startsWith(u8, line, "remove_path(") and line[line.len - 1] == ')') {
             const path = try self.evalExpr(line[12 .. line.len - 1]);
             if (path == .string) std.Io.Dir.cwd().deleteFile(self.io, path.string) catch {};
