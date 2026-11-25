@@ -147,6 +147,17 @@ if command -v script >/dev/null 2>&1; then
         printf '%s\n' "$locals_output"
         ((failed+=1))
     fi
+    breakpoint_output="$(printf 'debug\ntests/debug_breakpoints.pryzma\nb 3\nc\ns\nexit\n' | script -q -c "$bin" /dev/null 2>&1)"
+    if grep -Fq 'Debug: Executing line 3:' <<<"$breakpoint_output" &&
+       ! grep -Fq 'Debug: Executing line 2:' <<<"$breakpoint_output" &&
+       grep -Fq 'breakpoint line three' <<<"$breakpoint_output"; then
+        printf '[OK] debugger continue and breakpoint control flow\n'
+        ((passed+=1))
+    else
+        printf '[FAIL] debugger continue and breakpoint control flow\n'
+        printf '%s\n' "$breakpoint_output"
+        ((failed+=1))
+    fi
 fi
 if command -v python3 >/dev/null 2>&1; then
     if tests/test_http_import.sh "$bin"; then

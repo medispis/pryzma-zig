@@ -60,6 +60,8 @@ pub const Interpreter = struct {
     escape: bool = false,
     gc: bool = true,
     debug: bool = false,
+    debug_continue: bool = false,
+    debug_step_once: bool = false,
     unpack_: bool = false,
     in_loop: bool = false,
     main_file: i64 = 1,
@@ -2243,20 +2245,30 @@ pub const Interpreter = struct {
     }
 
     fn debugPrompt(self: *Interpreter, line: []const u8) !void {
-        var matched = self.breakpoints.items.len == 0;
+        var at_breakpoint = false;
         for (self.breakpoints.items) |bp| if (bp == self.current_line) {
-            matched = true;
+            at_breakpoint = true;
             break;
         };
-        if (!matched) return;
+        if (self.debug_continue) {
+            if (!at_breakpoint) return;
+            self.debug_continue = false;
+        } else if (self.debug_step_once) {
+            self.debug_step_once = false;
+        } else if (self.breakpoints.items.len != 0 and !at_breakpoint) {
+            return;
+        }
         self.printFmt("Debug: Executing line {d}: {s}\n", .{ self.current_line, line });
         while (self.debug) {
             self.out("debug> ");
             const raw = try self.inputLine("");
             const cmd = std.mem.trim(u8, raw, " \t\r\n");
-            if (std.mem.eql(u8, cmd, "s") or std.mem.eql(u8, cmd, "")) return;
+            if (std.mem.eql(u8, cmd, "s") or std.mem.eql(u8, cmd, "")) {
+                self.debug_step_once = true;
+                return;
+            }
             if (std.mem.eql(u8, cmd, "c")) {
-                self.debug = false;
+                self.debug_continue = true;
                 return;
             }
             if (std.mem.eql(u8, cmd, "exit")) {
