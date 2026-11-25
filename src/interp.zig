@@ -477,6 +477,16 @@ pub const Interpreter = struct {
             try self.bindPyExtern(line);
         } else if (std.mem.startsWith(u8, line, "extern ")) {
             try self.bindExtern(line);
+        } else if (std.mem.startsWith(u8, line, "use ")) {
+            try self.importFunctions(std.mem.trim(u8, line[4..], " \t"));
+        } else if (std.mem.startsWith(u8, line, "from ")) {
+            try self.importSelectedFunctions(std.mem.trim(u8, line[5..], " \t"));
+        } else if (std.mem.startsWith(u8, line, "load(") and line[line.len - 1] == ')') {
+            try self.loadPythonModule(line[5 .. line.len - 1]);
+        } else if (std.mem.startsWith(u8, line, "call(") and line[line.len - 1] == ')') {
+            _ = try self.evalExpr(line);
+        } else if (std.mem.startsWith(u8, line, "ccall(") and line[line.len - 1] == ')') {
+            _ = try self.evalExpr(line);
         } else if (std.mem.startsWith(u8, line, "append ")) {
             const args = try self.splitArgs(line[7..]);
             if (args.len == 2) {
@@ -1023,6 +1033,153 @@ pub const Interpreter = struct {
         }
     }
 
+    fn importFunctions(self: *Interpreter, spec_in: []const u8) !void {
+        var spec = std.mem.trim(u8, spec_in, " \t");
+        var alias: ?[]const u8 = null;
+        if (std.mem.indexOf(u8, spec, " as ")) |pos| {
+            alias = std.mem.trim(u8, spec[pos + 4 ..], " \t");
+            spec = std.mem.trim(u8, spec[0..pos], " \t");
+        }
+        const path_spec = parseQuotedOrWord(spec) orelse return;
+        const module_path = path_spec.value;
+        if (std.mem.startsWith(u8, module_path, "http://") or std.mem.startsWith(u8, module_path, "https://")) {
+            const python = self.python orelse return;
+            const url = try python.newString(module_path);
+            const response = try python.callHelper("http_get", &.{url});
+            defer py_mod.Py_DecRef(response);
+            py_mod.Py_DecRef(url);
+            const source = try python.fromPy(response);
+            if (source == .string) try self.loadPryzmaFunctions(source.string, alias orelse std.fs.path.stem(module_path));
+            return;
+        }
+        var file_path = module_path;
+        if (!std.mem.containsAtLeast(u8, file_path, 1, "/") and !std.mem.containsAtLeast(u8, file_path, 1, "\\")) {
+            const root = std.fs.path.dirname(self.file_path) orelse ".";
+            if (std.mem.indexOf(u8, file_path, "::")) |separator| {
+                const folder = std.mem.replaceOwned(u8, self.allocator, file_path[0..separator], "::", "/") catch return error.OutOfMemory;
+                const package_file = try std.fmt.allocPrint(self.allocator, "{s}.pryzma", .{file_path[separator + 2 ..]});
+                file_path = try std.fs.path.join(self.allocator, &.{ root, "packages", folder, package_file });
+            } else {
+                const package_file = try std.fmt.allocPrint(self.allocator, "{s}.pryzma", .{file_path});
+                file_path = try std.fs.path.join(self.allocator, &.{ root, "packages", file_path, package_file });
+            }
+        }
+        const data = std.Io.Dir.cwd().readFileAlloc(self.io, file_path, self.allocator, .limited(64 * 1024 * 1024)) catch {
+            self.runtimeError(30, try std.fmt.allocPrint(self.allocator, "Error at line {d}: File '{s}' not found.", .{ self.current_line, file_path }));
+            return;
+        };
+        const source = try self.unpackIfNeeded(data);
+        const name = alias orelse std.fs.path.stem(file_path);
+        try self.loadPryzmaFunctions(source, name);
+    }
+
+    fn importSelectedFunctions(self: *Interpreter, spec: []const u8) !void {
+        const use_pos = std.mem.indexOf(u8, spec, " use ") orelse return;
+        var module = std.mem.trim(u8, spec[0..use_pos], " \t");
+        const path: QuotedWord = parseQuotedOrWord(module) orelse .{ .value = module, .end = module.len };
+        module = path.value;
+        var functions_text = std.mem.trim(u8, spec[use_pos + 5 ..], " \t");
+        if (std.mem.startsWith(u8, functions_text, "{") and std.mem.endsWith(u8, functions_text, "}")) {
+            functions_text = functions_text[1 .. functions_text.len - 1];
+        }
+        const wanted = try splitCommaOrPipe(self, functions_text);
+        const data = std.Io.Dir.cwd().readFileAlloc(self.io, module, self.allocator, .limited(64 * 1024 * 1024)) catch return;
+        const source = try self.unpackIfNeeded(data);
+        const lines = try self.preprocess(source);
+        for (lines) |line| {
+            if (!std.mem.startsWith(u8, line, "/")) continue;
+            const open = std.mem.indexOfScalar(u8, line, '{') orelse continue;
+            var name = std.mem.trim(u8, line[1..open], " \t");
+            if (std.mem.indexOfScalar(u8, name, '.')) |dot| name = name[dot + 1 ..];
+            for (wanted) |raw| {
+                const selected = std.mem.trim(u8, raw, " \t");
+                const alias_pos = std.mem.indexOf(u8, selected, " as ");
+                const request_name = std.mem.trim(u8, if (alias_pos) |p| selected[0..p] else selected, " \t");
+                if (!std.mem.eql(u8, name, request_name)) continue;
+                var definition = line;
+                if (alias_pos) |p| {
+                    const replacement = std.mem.trim(u8, selected[p + 4 ..], " \t");
+                    definition = try std.fmt.allocPrint(self.allocator, "/{s}{s}", .{ replacement, line[open..] });
+                }
+                try self.interpret(definition);
+            }
+        }
+    }
+
+    fn loadPryzmaFunctions(self: *Interpreter, source: []const u8, prefix: []const u8) !void {
+        const lines = try self.preprocess(source);
+        for (lines) |line| {
+            if (!std.mem.startsWith(u8, line, "/")) continue;
+            const open = std.mem.indexOfScalar(u8, line, '{') orelse continue;
+            const original = std.mem.trim(u8, line[1..open], " \t");
+            var definition = line;
+            if (!self.nan and !std.mem.startsWith(u8, original, try std.fmt.allocPrint(self.allocator, "{s}.", .{prefix}))) {
+                definition = try std.fmt.allocPrint(self.allocator, "/{s}.{s}", .{ prefix, line[1..] });
+            }
+            try self.interpret(definition);
+            const name = std.mem.trim(u8, definition[1..std.mem.indexOfScalar(u8, definition, '{').?], " \t");
+            const import_handler = try std.fmt.allocPrint(self.allocator, "{s}.on_import", .{prefix});
+            if (std.mem.eql(u8, name, import_handler)) {
+                _ = try self.callFunction(name, &.{});
+            }
+        }
+    }
+
+    fn unpackIfNeeded(self: *Interpreter, data: []const u8) ![]const u8 {
+        if (!std.mem.startsWith(u8, data, "prz")) return data;
+        const python = self.python orelse return error.PythonUnavailable;
+        const bytes = try python.newBytes(data[3..]);
+        defer py_mod.Py_DecRef(bytes);
+        const result = try python.callHelper("lzma_decompress", &.{bytes});
+        defer py_mod.Py_DecRef(result);
+        const unpacked = try python.fromPy(result);
+        return if (unpacked == .string) unpacked.string else "";
+    }
+
+    fn loadPythonModule(self: *Interpreter, expression: []const u8) !void {
+        const module_ref = try self.evalExpr(expression);
+        if (module_ref != .string) return;
+        const python = self.python orelse return;
+        const path = try python.newString(module_ref.string);
+        const base = try python.newString(self.file_path);
+        const module = try python.callHelper("load_pyextern", &.{ path, base });
+        defer py_mod.Py_DecRef(module);
+        py_mod.Py_DecRef(path);
+        py_mod.Py_DecRef(base);
+        const attr = try python.newString("start");
+        const start = py_mod.PyObject_GetAttrString(module, "start") orelse {
+            py_mod.Py_DecRef(attr);
+            return;
+        };
+        py_mod.Py_DecRef(attr);
+        const ext = try self.allocator.create(value.ExternFn);
+        ext.* = .{ .callable = start, .name = "start", .is_c = false };
+        try self.setVar("__module_start", .{ .extern_fn = ext });
+    }
+
+    fn callFromFile(self: *Interpreter, args_text: []const u8, is_c: bool) !Value {
+        const args = try self.splitArgs(args_text);
+        if (args.len < 2) return .none;
+        const file = try self.evalExpr(args[0]);
+        const function_name = try self.evalExpr(args[1]);
+        if (file != .string or function_name != .string) return .none;
+        const python = self.python orelse return .none;
+        const path = try python.newString(file.string);
+        const name = try python.newString(function_name.string);
+        const values = try List.create(self.allocator);
+        for (args[2..]) |arg| try values.append(try self.evalExpr(arg));
+        const py_values = try python.toPy(.{ .list = values }, is_c);
+        defer py_mod.Py_DecRef(path);
+        defer py_mod.Py_DecRef(name);
+        defer py_mod.Py_DecRef(py_values);
+        const result = if (is_c)
+            try python.callHelper("ccall", &.{ path, name, py_values })
+        else
+            try python.callHelper("call_file", &.{ path, name, py_values });
+        defer py_mod.Py_DecRef(result);
+        return try python.fromPy(result);
+    }
+
     pub fn callFunction(self: *Interpreter, name_in: []const u8, args: []Value) anyerror!Value {
         var name = name_in;
         if (self.lookupVar(name)) |v| {
@@ -1551,6 +1708,12 @@ pub const Interpreter = struct {
                     return try python.fromPy(result);
                 }
             }
+        }
+        if (std.mem.startsWith(u8, expr, "call(") and isWholeCall(expr, "call")) {
+            return try self.callFromFile(expr[5 .. expr.len - 1], false);
+        }
+        if (std.mem.startsWith(u8, expr, "ccall(") and isWholeCall(expr, "ccall")) {
+            return try self.callFromFile(expr[6 .. expr.len - 1], true);
         }
         if (std.mem.startsWith(u8, expr, "pyexec(") and expr[expr.len - 1] == ')') {
             const a = try self.splitArgs(expr[7 .. expr.len - 1]);

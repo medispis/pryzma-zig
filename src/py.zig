@@ -11,7 +11,7 @@ extern "c" fn Py_InitializeEx(initsigs: c_int) void;
 extern "c" fn Py_FinalizeEx() c_int;
 extern "c" fn PyRun_StringFlags(code: [*:0]const u8, start: c_int, globals: *PyObject, locals: *PyObject, flags: ?*anyopaque) ?*PyObject;
 extern "c" fn PyImport_ImportModule(name: [*:0]const u8) ?*PyObject;
-extern "c" fn PyObject_GetAttrString(obj: *PyObject, name: [*:0]const u8) ?*PyObject;
+pub extern "c" fn PyObject_GetAttrString(obj: *PyObject, name: [*:0]const u8) ?*PyObject;
 extern "c" fn PyObject_SetAttrString(obj: *PyObject, name: [*:0]const u8, v: *PyObject) c_int;
 extern "c" fn PyObject_Call(callable: *PyObject, args: *PyObject, kwargs: ?*PyObject) ?*PyObject;
 extern "c" fn PyObject_CallObject(callable: *PyObject, args: ?*PyObject) ?*PyObject;
