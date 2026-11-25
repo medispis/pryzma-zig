@@ -594,6 +594,13 @@ pub const Interpreter = struct {
                     self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: {s}", .{ self.current_line, @errorName(err) }));
                 };
             }
+        } else if (std.mem.startsWith(u8, line, "rmdir(") and line[line.len - 1] == ')') {
+            const path = try self.evalExpr(line[6 .. line.len - 1]);
+            if (path == .string) {
+                std.Io.Dir.cwd().deleteDir(self.io, path.string) catch |err| {
+                    self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: {s}", .{ self.current_line, @errorName(err) }));
+                };
+            }
         } else if (std.mem.startsWith(u8, line, "remove_path(") and line[line.len - 1] == ')') {
             const path = try self.evalExpr(line[12 .. line.len - 1]);
             if (path == .string) std.Io.Dir.cwd().deleteFile(self.io, path.string) catch {};
