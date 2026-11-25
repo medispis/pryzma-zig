@@ -604,6 +604,17 @@ pub const Interpreter = struct {
         } else if (std.mem.startsWith(u8, line, "removedirs(") and line[line.len - 1] == ')') {
             const path = try self.evalExpr(line[11 .. line.len - 1]);
             if (path == .string) try self.removeDirs(path.string);
+        } else if (std.mem.startsWith(u8, line, "copy(") and line[line.len - 1] == ')') {
+            const args = try self.splitArgs(line[5 .. line.len - 1]);
+            if (args.len == 2) {
+                const source = try self.evalExpr(args[0]);
+                const destination = try self.evalExpr(args[1]);
+                if (source == .string and destination == .string) {
+                    std.Io.Dir.cwd().copyFile(source.string, .cwd(), destination.string, self.io, .{}) catch |err| {
+                        self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: {s}", .{ self.current_line, @errorName(err) }));
+                    };
+                }
+            }
         } else if (std.mem.startsWith(u8, line, "copyfile(") and line[line.len - 1] == ')') {
             const args = try self.splitArgs(line[9 .. line.len - 1]);
             if (args.len == 2) {

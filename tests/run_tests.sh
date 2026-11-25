@@ -102,6 +102,18 @@ else
     printf '%s\n' "$copy_output"
     ((failed+=1))
 fi
+copy_method_destination="$mkdir_tmp/copy-method.txt"
+copy_method_program="$mkdir_tmp/copy-method.pryzma"
+printf 'copy("%s", "%s")\n' "$copy_source" "$copy_method_destination" >"$copy_method_program"
+copy_method_output="$("$bin" "$copy_method_program" 2>&1)"
+if [[ -z "$copy_method_output" && -f "$copy_method_destination" ]] && cmp -s "$copy_source" "$copy_method_destination"; then
+    printf '[OK] copy statement\n'
+    ((passed+=1))
+else
+    printf '[FAIL] copy statement\n'
+    printf '%s\n' "$copy_method_output"
+    ((failed+=1))
+fi
 rm -rf "$mkdir_tmp"
 if command -v script >/dev/null 2>&1; then
     repl_output="$(printf 'print "alpha"\nhistory\nhistory print\nhistory 1\nhistory clear\nhistory\nexit\n' | script -q -c "$bin" /dev/null 2>&1)"
