@@ -1,0 +1,54 @@
+/func{loc a = 9; @func2(&a)}
+
+/func2{b = *args[0]; print b}
+
+@func
+
+/f{ print b, "\n" }
+
+@f
+
+print a, "\n"
+
+/fn{
+    loc var = 1
+    @fn2
+    print var
+}
+
+/fn2{
+    loc var = 2
+    print var
+}
+
+
+@fn
+
+
+/fn3{
+    print var2
+    loc var2 = 1
+    var2 = 2
+    print var2
+}
+
+var2 = 9
+
+@fn3
+
+print var2
+
+#esc
+
+/esc_test{
+    loc a = 9
+    return &a
+}
+
+b = @esc_test
+
+print *b
+
+*b = 7
+
+print *b

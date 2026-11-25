@@ -1,0 +1,12 @@
+/func{
+    for(i, 1:4){
+        for(j, 1:4){
+            print i
+            print "\n"
+            print args[0]
+            print "\n"
+        }
+    }
+}
+
+@func("hello")

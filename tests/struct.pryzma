@@ -1,0 +1,78 @@
+struct Person {
+    name
+    age = 30
+}
+
+p = Person {age=30, name="Some, name"}
+
+print p.name, "\n"
+print p.age, "\n"
+
+p2 = Person {}
+
+p2.name = "Alice"
+
+print p2, "\n"
+
+
+struct Address {
+    street
+    city
+}
+
+struct Person {
+    name
+    address
+}
+
+p = Person {
+    "Alice"
+    Address {
+        "123 Main St"
+        "Paris"
+    }
+}
+
+print p.address.city, "\n"
+
+
+struct Name {
+    name="Alice",
+    surname="Brown"
+}
+
+
+struct Person {
+    name = Name {
+        name="Alice",
+        surname="Brown"
+    },
+    age = {"age": 30, "adult": True}
+}
+
+
+p = Person {}
+
+print p.name.surname, "\n"
+
+p.name.surname = "White"
+
+print p.name.surname, "\n"
+
+
+print p.age["age"], "\n"
+print p.age["adult"], "\n"
+
+struct Person {name, age}
+a = Person {}
+
+a.name = "some name"
+a.age = 7
+
+{b, c} = a
+
+print b, "\n", c
+
+a = [{"gg": 5}]
+
+print a[0].gg

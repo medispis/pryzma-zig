@@ -1,0 +1,1435 @@
+Pryzma programming language official documentation
+
+Pryzma is a simple interpreted programing language written in python
+
+if you wish you can put semicolons at the end of a line but you don't need to
+
+Variables:
+
+in pryzma you have strings, integers, floats, booleans, lists, dictionaries and tuples:
+
+a = "a"
+
+value = 1
+value2 = 1.1
+
+condition = True
+condition2 = False
+
+my_list = []
+my_dict = {}
+my_tuple = ()
+
+you can define staticly typed strings and integers:
+
+int x
+
+default value 0
+
+int x = 6
+int x = "7"
+
+"7" will be converted to an integer
+
+str a
+
+default value ""
+
+str a = "a"
+
+str value = 7
+
+7 will be converted to a string
+
+you can define local variables as follows:
+
+/func{
+    loc a = 10;
+    print a //will print 10
+}
+
+print a //will throw an error
+
+List operations:
+
+list = [1,2,3]
+
+print list[0] outputs 1 etc.
+
+append a, "text"
+
+it will append a string "text" to list a, you can also do copy that append elements from one list to another:
+
+a = [1,2]
+
+b = [3,4]
+
+copy b,a
+
+print a
+
+output will be [1,2,3,4]
+
+a = ["text", "text2"]
+
+pop a, 0
+
+print a
+
+it will pop the index 0 ("text") from list a and output ["text2"]
+
+pop as an rvalue:
+
+a = ["text", "text2"]
+
+print pop a //output text2
+
+'a' after pop:
+
+["text"]
+
+you can remove from a list like this:
+
+a = [1,2,3,4,5]
+
+remove a,5
+
+print a
+
+output will be:
+[1,2,3,4]
+
+you can move objects on a list by using the move instruction like that:
+
+a = [1,2,3,4,5]
+
+move(0, 1, a)
+
+print a
+
+output will be [2, 1, 3, 4, 5] becouse it moves the object with the index 0 to index 1
+
+you can also swap variables like that:
+
+a = [1,2,3,4,5]
+
+swap(0, 2, a)
+
+print a
+
+output will be [3, 2, 1, 4, 5]
+
+in dictionaries you can do:
+
+push(dict_name,key,value)
+
+to push a value in to a dictionary
+
+a = get(dict_name,key)
+
+to retrive a value from a dictionary
+
+dpop(dict_name,key)
+
+to pop a value from a dictionary
+
+Type conversion:
+
+variable = int(variable)
+
+or
+
+variable = str(1)
+
+or
+
+a = ("a", "b")
+
+variable = list(a)
+
+etc.
+
+to get type of some variable you can do:
+
+a = 1
+b = type(a)
+print b
+
+it will print int
+
+you can also check if a variable is a number like this:
+
+a = 1
+
+b = isanumber(a)
+
+print b
+
+output will be True
+
+
+Len:
+you also can do len like that:
+
+a = "text"
+
+print len(a)
+
+it will print 4 ,you can also do:
+
+a = [1,2,3,4,5]
+
+print len(a)
+
+it will print 5
+
+index:
+
+a = [1,2,3,4,5]
+b = index(a, 3)
+print b
+
+output will be 2
+index() returns index of value in some list or error if isn't in the list
+
+
+Split:
+
+a = "textMtext"
+b = splitby("M", a)
+print b
+
+output will be a list that will look like that:
+
+["text", "text"]
+
+as the third argument you can pass how many times you want to split like in python
+
+there is also resplit() that allows for spliting with a regex:
+
+e = "123abc456def"
+f = resplit("\d+", e)
+print f
+
+Output:
+
+["", "abc", "def"]
+
+Replace:
+
+a = "ddd"
+
+a = replace(a,"d","f")
+
+print a
+
+output will be "fff" I think it is self explanatory
+
+Arithmetic Operations:
+
+Pryzma supports basic arithmetic operations including addition, subtraction, multiplication, and division.
+
+result = 10 + 5
+total = 2 * 3
+difference = 8 - 4
+quotient = 10 / 2
+
+Input/Output:
+
+Pryzma allows input from the user and output to the console. Concatenation is used to combine strings and variables for output.
+
+input age::"age:"
+print "Your age is: ", age
+
+in input age is a variable that input will be assigned to it and "age:" is the prompt, if input will look like that:
+
+input age
+
+then no prompt will be displayed
+
+if there is \n in line it will print new line like in C, you can also do string slicing like that:
+
+a = "text"
+
+print a[1:-1]
+
+it will print 'ex' because it will remove one character form right and one from left
+
+Flow Control:
+
+Pryzma supports simple flow control using the stop statement. It terminates the program.
+
+stop
+
+For loops:
+
+for(i, 1:4){
+    print i
+    print "\n"
+    print "hello"
+    print "\n"
+}
+
+
+output will be:
+
+1
+hello
+2
+hello
+3
+hello
+
+there is also foreach to iterate lists:
+
+a = ["h","e","l","l","o"]
+
+foreach(element,a){print element}
+
+you can use break statements
+
+While:
+
+while(a==b){print i}
+
+while value of a equals value of b value of i will be printed
+it supports the same operators as if and break statements
+
+incrementing by one:
+
+i = 0
+i++
+print i
+output will be 1 , ++ increments by one you can also do ++i
+
+decrementing by one:
+
+i = 1
+i--
+print i
+output will be 0 , -- decrements by one you can also do --i
+
+normal incrementing:
+you can use += like this
+
+x=5
+x+=5
+print x
+
+it will print 10
+
+normal decrenenting:
+
+x = 10
+x-=5
+print x
+
+output:
+5
+
+importing:
+
+use file_path
+
+after import you can use functions from the imported file
+
+if you add ./ before the file path it will look for the given file in the same folder as the file,
+and if you just give the module name it will look for it in the packages folder that is created while installing packages with ppm (under packages/package_name/package_name.pryzma).
+you can also import files over http and https like this:
+
+use https://raw.githubusercontent.com/IgorCielniak/Pryzma-packages/main/net/net.pryzma
+
+in imported files if there is a function "on_import" it will be called instantly when importing the file
+
+you can invoke a pragma for the duration of the import with the 'with' keyword:
+
+use ./module.pryzma with #nan
+
+this will import the module.pryzma file without automatic namespacing, after the import automatic namespacing will be set back
+to the same value it was before the import (either True or False), any valid pragma can be used
+
+you can import a particular function from a file using the following construction:
+
+from file use function
+
+you can also import functions from files called diffrently than the module like this:
+
+use core::lib
+
+this would import packages/core/lib.pryzma
+
+it also supports submodules
+
+use std::core::lib
+
+this would import packages/std/core/lib.pryzma
+
+you can also import .prz files the same way, but in a module the main file still must have the .pryzma extension, at least for now,
+you can go about it this way, make a main file with the .pryzma ext. that just has an insert directive pointing to a .prz file and this should work (not tested)
+
+example:
+
+from ./module.pryzma use func, func2 with #nan
+
+if functions are allready prefixed with module name and dot than
+you should pass the function names without the prefix and the #nan pragma
+
+you can also import modules with aliases like this:
+
+use math as m
+
+it would import all functions from the module math with the prefix 'm' instead of 'math', aliases work with the 'with' keyword.
+
+Comments:
+
+Comments in Pryzma start with the // symbol and continue to the end of the line.
+
+// This is a comment
+
+you also can do in line comments:
+
+print "Hello, World" //This prints Hello, world
+
+
+If statement:
+
+input variable::"var1:"
+input variable2::"var2:"
+if(variable==variable2){print "true"|print "text"}elif(variable>variable2){print ">"}else{print "no"}
+
+or
+
+if(variable==variable2){
+print "true"
+print "text"
+}elif(variable>variable2){
+print ">"
+}else{
+print "no"
+}
+
+you can use operators like: ==, !=, <=, >=, < and >,
+you can also use it without any operator like this:
+
+a = True
+
+if(a){print "True"}else{print "False"}
+
+you can also use ternary operators:
+
+a = True
+b = False
+
+print a if 1 else b
+
+output:
+
+True
+
+Functions:
+
+declare function:
+
+/function_name{command|command2|command3}
+or
+/func_name{
+command
+command
+}
+
+you separate the instruction using the pipe symbol | or ; as well in multiline functions
+
+calling functions:
+
+@function_name("text")
+
+a list called args will be created and contain all arguments in this case it would
+contain the string "text", variables also can be used as arguments like that:
+
+
+/add{print args[0]}
+
+a = "text"
+
+@add(a)
+
+to call a function without argument you can do
+
+@add
+
+a function can return a value using the return keyword:
+
+/func{return "hello"}
+
+a = @func
+
+print a
+
+output:
+
+hello
+
+defer:
+
+/main{
+    print "start"
+    defer{
+        print "deferred"
+    }
+    print "end"
+}
+
+
+@main
+
+the code inside the defer block will be run after the function finishes execution, pretty standard no fancy syntax sugar or anythink
+
+Methods:
+
+a = [1, 2, 3, 4, 5]
+
+/add{
+    x = *args[0]
+    c = args[1]
+    l = args[2]
+    for(i, 0:l){
+        x[i] += c
+    }
+}
+
+a.@add(4, len(a))
+
+this calls the function 'add' as a method on the list 'a', the reference to 'a' is passed as the first argument
+and 4 as well as len(a) are respectively as the second and third arg
+
+print a //outputs [5, 6, 7, 8, 9]
+
+
+Sys function:
+
+sys("os command")
+
+can be used like that:
+
+sys("echo Hello")
+
+or:
+
+command = "echo world"
+
+sys(command)
+
+Read and write:
+
+content = file_read("C:\Users\User\Desktop\Untitled-1.txt")
+
+content of file C:\Users\User\Desktop\Untitled-1.txt will be assigned to variable content
+
+file_write("C:\Users\User\Desktop\Untitled-1.txt",mode,content)
+
+it will write value of variable content to file C:\Users\User\Desktop\Untitled-1.txt in mode stored as a value of variable mode
+
+In:
+
+a = [1,2,3]
+
+b = in(a, 2)
+
+print b
+
+output will be True, you can also check if some string appears in the list
+
+Del:
+
+you can use delvar to delete a variable like that:
+
+a = "text"
+
+print a
+
+delvar("a")
+
+print a
+
+it will print text and then it will give error that will say that variable a doesn't exist
+as the argument for the delvar() function you can pass strings with the name of the variable so you can do this:
+
+a = "text"
+b = "a"
+
+print a
+
+delvar(b)
+
+print a
+
+the output will be the same as in the earlier example
+
+you can also delfunc to to delete a function in the same way
+
+disablekeyword and enablekeyword:
+
+you can enable and disable keywords like this:
+
+disablekeyword("print", "use")
+
+print 5 //error: deleted keyword 'print'
+use math //error: deleted keyword 'use'
+
+and you can enable back the keywords:
+
+enablekeyword("print", "use")
+
+print 5 // outputs 5
+
+exec:
+
+there is a function called exec that as the name suggests executes pryzma code from a string:
+
+exec("a = 10", "print a")
+
+and it will output 10
+
+instead of a string you can also pass a variable
+
+exec can also be an rvalue like this:
+
+result = exec("@func")
+
+result would be the return value of func
+
+there is also eval() that is used the same way but instead of interpreting it evaluates the given expression,
+if the expression returns somethink the eval also returns the same think but if you pass multiple expressions
+it returns the value of the firts expression that does not return None
+
+Cli arguments:
+by running:
+
+python Pryzma.py file_path d df
+
+a list called argv will be accesable from code and in this example it will contain two variables 'd' and 'df'
+as well as a '__file__' variable that holds the full path to the current running file and a 'interpreter_path' variable that holds
+the path to the interpreter
+you can pass as many arguments as you wish
+
+Calling python and c functions from Pryzma (ffi):
+
+call(file_path,func_name, args)
+
+for example:
+
+call("C:\Users\User\Desktop\test2.py", "func2", "hello from python")
+
+and file "C:\Users\User\Desktop\test2.py" content being:
+
+def func2(arg):
+        print(arg)
+
+it will print "hello from python"
+
+there also is ccall() that allows you to call c functions the same way, you just pass the .so file path so for example:
+
+sum = ccall("./so.so", "add", 2, 2)
+
+extern:
+
+extern "libc.so.6" malloc
+extern "libc.so.6" free
+
+or
+
+extern "libc.so.6" {
+    malloc
+    free
+}
+
+than you can call them like any other function
+
+ptr = @malloc(1)
+
+@free(ptr)
+
+if you want to expose every symbol from a shared library without listing them, use a wildcard:
+
+extern "libc.so.6" *
+
+The interpreter will remember the library and resolve functions on first use, so calling
+@puts, @malloc, etc. will automatically bind the matching symbol the first time you call it.
+
+pyextern:
+
+pyextern "./scripts/helpers.py" greet
+pyextern "./scripts/helpers.py" { repeat as re | Tools.triple as triple }
+pyextern "./scripts/helpers.py" *
+
+pyextern works just like extern but for Python modules. Pass either a file path ending with .py or an importable module name.
+Entries can optionally specify an alias using "as". Nested attributes are supported, so you can bind Tools.triple while exposing
+it under a different name:
+
+pyextern "./scripts/helpers.py" { Tools.triple as triple }
+
+After binding, call the function the same way as any Pryzma function:
+
+value = @triple(4)
+
+Using * with pyextern registers every public (non-underscore) callable exported by the module in one statement.
+
+Time:
+
+you can do some time operations like that:
+
+start_time = timenow
+// ... some code or processing ...
+end_time = timenow
+time = end_time - start_time
+print time
+
+and it will print how much time it took to execute the code, timenow returns the current time.
+if you want the program to wait you can do
+
+wait(5)
+
+the "5" in this example is time in seconds that you want to wait
+
+
+Extending the interpreters functionality:
+
+you can define custom keywords by making and loading a python extesnion for the interpreter, example extension:
+
+def start(line):
+    if line.startswith("customfunc"):
+        text = line[10:].strip()
+        print(text)
+        return True  // Indicate that the line was handled
+    return False  // Indicate that the line was not handled
+
+this function takes the line and checks if it starts with customfunc and if it does it print the rest of the line
+excluding the "customfunc"
+
+to use the custom keywords from the pryzma code you need to load the module like this:
+
+load("/home/user/Desktop/new.py")
+customfunc hello
+
+this code will load the module and print "hello"
+the arg for the load() function can also be a variable
+the funcion in the python module code needs to be named "start"
+
+Try:
+
+Pryzma has a basic try block, this is how it looks:
+
+try{ print a }catch(38){ print "a is not defined" }
+
+or:
+
+try{
+    print a
+}catch(38){
+    print "a is not defined"
+}
+
+the variable 'err' will hold a value of 38 after executing this code
+becouse the print instruction tries to acces variable a that is not created so it fails with status code 38
+the err variable is reset to zero only after a next try block is successfully executed or when changed manually
+
+startswith and endswith:
+
+a = "Pryzma"
+
+b = startswith("P", a)
+
+print b
+
+output:
+
+True
+
+-----------------------------------
+
+a = "Pryzma"
+
+b = startswith("something", a)
+
+print b
+
+output:
+
+False
+
+randint:
+
+a = randint(1,100)
+
+print a
+
+prints a random number in range 1 to 100
+
+strip:
+
+a = "     h       "
+
+b = strip(a)
+
+print b
+
+output:
+
+h
+
+char():
+
+char() is used to convert an ascii value to a chatacter for example:
+
+print char(123)
+
+output:
+
+{
+
+join:
+
+a = ["h","e","l","l","o"]
+
+b = join("",a)
+
+print b
+
+output:
+
+hello
+
+pyeval:
+
+result = pyeval("1==1",stack)
+
+print result
+
+output:
+
+True
+
+the stack is an optional argument so you can pass your own stack
+
+pyexec() also exists and works the same but uses exec() instead eval() under the hood
+
+inline python:
+
+a = "world"
+
+py{
+    "print("hello")"
+    "print(a)"
+}
+
+output:
+
+hello
+world
+
+
+defined():
+
+a = defined(b)
+
+if b is defined a will be True and if b is not defined a will be False
+
+pragmas:
+
+#preproc = np,fd,nan
+
+fd - forward declare functions
+np - don't preprocess
+nan - no automatic namespacing
+an - enable automatic namespacing
+rs - make retrun statements stop the function execution
+rds - make retrun statements don't stop the function execution (default)
+esc - allow for escaping of locals (explained bellow)
+desc - don't allow for escaping of locals (explained below)
+fail - explained below
+df - explained below
+gc - enable garbage colection (default)
+ngc - disable garbage colection
+
+#nan, #an, #fd, #np, #rs and #rds are also supported
+
+#esc and #desc pragmas control if local variables can escape their scope, and here is what i mean by that:
+
+#esc
+
+/func{
+    loc a = 9
+    return &a
+}
+
+b = @func
+
+print *b //outputs 9, value of the local a
+
+*b = 7 //sets the local a to 7
+
+print *b //outputs 7 the new value of the local a
+
+in the following example the #esc pragma is set and as you can see
+the function returns a reference to its local variable, in this case
+when the #esc pragma is set the variable would be still accesable via
+the reference and you can read from it and write to it, if you don't
+set the #esc pragma you will get an error saying that the referenced
+variable a no longer exists, and thats true becouse it doesn't just go
+out of scope, if #esc isn't set the locals are deleted by the garbage collector
+after the function finishes execution, the garbage colector also removes the locals
+that had a valid reference but no longer do becouse the variable holding the reference
+got deleted etc. so basicly as of my understanding pryzma now has normal garbage collection.
+I hope that everythink is understandable after this long but i think needed exploanation
+
+there also is #fail and #df
+
+by default pryzma programs don't terminate after an error
+
+when #fail is set any error will terminate the program execution
+when #df is set errors will not terminate the program execution
+
+#replace a -> b
+
+replaces all instances of a with b, a and b can be strings, numbers, variables etc.
+no limits, replaces in all source code no matter what, example:
+
+#replace "a" -> "b"
+
+print "aabbaa" //prints bbbbbb
+
+replace also supports regural expressions:
+
+#replace "[0-9]+" -> "X"
+
+a = 123
+print 45
+
+changes to:
+
+a = X
+print X
+
+#shell pragma:
+
+not a lot to say, it opens the repl during the program execution
+allowing for inspection of vars, funcs and structs as well as executing arbitrary pryzma code
+
+insert:
+
+#insert "file.pryzma"
+
+the #insert pragma inserts code from another file in to the source code,
+and thats basicly all it does, it supports both regular .pryzma files as well as .prz files. (btw under the hood it doesn't insert anythink it just gets the file content and interprets it, same result easier to implement but i wanted a cool name (compleatly not inspired by jai))
+
+more pragmas will be added in the future
+
+inline asm:
+
+a = 10
+b = 20
+c = 0
+
+asm{
+    "mov rax, a"
+    "add rax, b"
+    "mov c, rax"
+}
+
+print c
+
+output will be:
+
+30
+
+for now it only supports integers
+
+asm backend pragmas:
+
+#asm_native/anat -> switches inline asm to the native RWX backend (uses keystone)
+#asm_emu/asm_emulator/aemu -> switches inline asm back to the unicorn emulator backend (default)
+
+File and directories operations etc.
+
+
+mkdir(path)
+
+makeidrs(path)
+
+rmdir(path)
+
+removedirs(path)
+
+copy(src, dst)
+
+copyfile(src, dst)
+
+move(src, dst)
+
+rename(src, dst)
+
+remove_path(path)
+
+symlink(src, dst)
+
+unlink(path)
+
+dirname(path)
+
+is_file(path)
+
+is_dir(path)
+
+exists(path)
+
+file_size(path)
+
+join_path(path1, path2 ...)
+
+abs_path(path)
+
+basename(path)
+
+split_ext(path)
+
+list_dir(path)
+
+walk(path)
+
+is_link(path)
+
+read_link(path)
+
+match:
+
+x = 4
+match(x){
+    case(1){
+        print "x is 1"
+    }
+    case(2){
+        print "x is 2"
+    }
+    case(_){
+        print "default case"
+    }
+}
+
+
+assert:
+
+assert condition, message
+
+example:
+
+x = @func()
+
+assert x==0, "func return value wasn't 0"
+
+structs:
+
+simple example should say everythink:
+
+struct Person {
+    name
+    age = 30
+}
+
+p = Person {"Some, name", 30}
+
+print p.name, "\n"
+print p.age, "\n"
+
+p2 = Person {} //fields without a default value will be initialized to None
+
+p2.name = "Alice"
+
+print p2
+
+output:
+
+Some, name
+30
+{'name': 'Alice', 'age': 30}
+
+everythink should be self explanatory
+
+you can use the fields() function that returns all fields of a given struct instance like this:
+
+print fields(p2)
+
+output:
+
+['name', 'age']
+
+btw. it works on dictionaries and just returns the keys (its not that structs are basicly dictionaries, noooo, not at all)
+
+you can also do nested structs like this:
+
+struct Address {
+    street
+    city
+}
+
+struct Person {
+    name
+    address
+}
+
+p = Person {
+    "Alice"
+    Address {
+        "123 Main St"
+        "Paris"
+    }
+}
+
+print p.address.city
+
+I think this is also quite self explanatory
+
+you can destructurise an instance of a struct in the following way:
+
+struct Person {name, age}
+p = Person {}
+
+p.name = "some name"
+p.age = 7
+
+{name, age} = p
+
+print name, "\n", age
+
+output:
+
+some name
+7
+
+using:
+
+struct Person {
+    age = 20
+    name = "Alex"
+}
+
+a = Person {}
+
+using a
+
+print age //20
+print name //Alex
+
+using exports all fields of the struct to the local namespace by default, to export to global use the following syntax (more advanced example):
+
+struct t {val = 0}
+i = t {}
+i.val = 45
+/func{
+    using global args[0]
+    print val //prints 45
+}
+@func(&i)
+
+print val //also prints 45
+
+in this form of the example:
+
+struct t {val = 0}
+i = t {}
+i.val = 45
+/func{
+    using args[0]
+    print val //prints 45
+}
+@func(&i)
+
+print val //error, variable not found
+
+the fields are exported to the local namespace specific to the call and later the print outside of the func fails
+
+
+references etc. :
+
+
+Pryzma supports references, which allow you to create variables that point other variables. This is useful for modifying variables within functions or for creating complex data structures.
+
+Creating a reference (&):
+
+You can create a reference to a variable using the `&` operator. For example:
+
+x = 8
+p = &x
+
+In this example, `p` is a reference to `x`.
+
+Dereferencing (*):
+
+You can get the value of a variable that a reference points to using the `*` operator. For example:
+
+x = 8
+p = &x
+print *p //prints 8
+
+Assigning a new value to a referenced variable:
+
+You can change the value of the original variable by assigning a new value to the dereferenced variable. For example:
+
+x = 8
+p = &x
+*p = 10
+print x //prints 10
+
+Assigning a new reference:
+
+You can also assign a new reference to a variable. For example:
+
+x = 8
+y = 12
+p = &x
+p = &y
+*p = 14
+print y //prints 14
+
+Automatic dereferencing:
+
+When you access a field of a reference to a struct, the interpreter will automatically dereference the variable for you. For example:
+
+struct Person {
+    name
+    age
+}
+
+p = Person{"Alice", 30}
+p_ref = &p
+p_ref.name = "Bob"
+print p.name //prints "Bob"
+
+simple example:
+
+x = 8
+p = &x
+*p = 10
+
+print x //would print 10
+
+function references:
+
+/func{ return 2+2 }
+
+a = &func
+
+print @a //prints 4
+
+a in this case can be passed as an argument to another function etc. its just a variable from the point od the backend
+its automaticly dereferenced on call, @*a is not supported but b = *a; @b is becouse
+in pryzma you can dereference all values and if the value isn't a reference it will just be unaffected
+i think its all self explanatory
+
+Manual memory mode:
+
+You can toggle the libc-backed storage backend for globals using pragmas:
+
+#mm    // enable raw manual storage (defaults to this backend)
+#mmraw // alias for #mm
+#amm   // disable and return to automatic mode
+
+When manual memory is active each global variable is backed by an actual `malloc` slot
+inside the interpreter. Using `&var` captures the slot address and `*ptr` dereferences it,
+so assignments like:
+
+value = 5
+ptr = &value
+*ptr = 12
+
+modify the same underlying memory cell and remain visible through `value`. Turning the
+mode off with `#amm` unwraps everything back to normal automatic storage.
+
+Key properties of the raw backend:
+
+- Slots are carved out of libc, so `addr(ptr)` returns a pointer you can pass directly to
+    `extern` or `pyextern` functions (including `libc.free`).
+- Supported types mirror safe C layouts: booleans, signed 64-bit integers, doubles and
+    byte buffers (bytes/bytearray/memoryview). Strings should be encoded explicitly.
+- Byte slots keep the capacity they were first given; trying to write past it raises an
+    error instead of silently corrupting memory.
+- The interpreter manages every slot you create via normal assignments, which means
+    globally enabling `#mm` instantly moves *all* globals to the C heap without sprinkling
+    manual `malloc` calls.
+
+Example roundtrip with the helper functions from `raw_helper.py`:
+
+```
+#mm
+pyextern raw_helper {write_int|read_int}
+a = 7
+ptr = &a
+@write_int(addr(ptr), 42)
+print @read_int(addr(ptr)) // prints 42
+#amm
+```
+
+If you want to interact with the system allocator directly, Pryzma now sets up sensible
+default signatures for common libc routines when you import them via `extern`. The
+`tests/libc_malloc.pryzma` program shows how to combine `extern "libc.so.6" {malloc|free}`
+with the helpers from `raw_helper.py` to store multiple 64-bit integers inside a manually
+managed buffer.
+
+you can check if somethink is a function with is_func()
+
+/func{return 2+2}
+a = &func
+b = @func
+print is_func(a) //True
+print is_func("func") //True
+print is_func("b") //False
+
+lambdas:
+
+a = /{return 2+2}
+
+print @a //outputs 4
+
+in this case 'a' is actually a function pointer and it points to a function that gets created that is named _lambda+random id
+
+/func{a = args[0]; @a}
+
+@func(/{print "a"})
+
+output:
+
+a
+
+lazy expressions:
+
+a = 7
+b = ~a
+a = 6
+print b //outputs 6
+
+i think this is self explanatory
+
+memory:
+
+Pryzma has some manual memory management capabilities that work as follows:
+
+by default pryzma provides 4kb of memory to the uses and you can use two functions to manipulate it:
+
+write(0x0000, ascii("g"))
+
+print char(read(0x0000)) // outputs g
+
+for now this is all of the memeory manipulation functions
+
+patch()
+
+you can patch the body of a function at runtime like so:
+
+/func{
+    try{
+        print a
+    }
+    if(err!=0){
+        patch("func", "func2")
+        @func
+    }
+}
+
+/func2{print "gg"}
+
+@func
+
+as you can see the variable a is not defined anywhere so print a would fail and the err would not be equal to 0 anymore
+so this would run the patch() that would swap the list of instructions for func to the list of instructions of func2
+and than call func once more and the output of all of this code would be 'gg', so this is basicly hot swapping function bodies at runtime
+might prove usefull, or compleatly useless, we will see
+
+isolates:
+
+In pryzma there is a concept of isolates that are basicly isolated instances of the interpreter,
+isolates allow for execution of pryzma code without modifying the main program interpreter's stack.
+This is how to use isolates:
+
+to run some code in an isolate you use the isolate() function, pretty obvious isn't it?,
+the function accepts pryzma code and optionally you can pass an allready existing isolate so you can reuse it later,
+if you don't pass an existing isolate a new one will be created automaticly.
+Now you may ask 'how to get an isolate?', and here comes to play the new_isolate() function,
+it creates and returns a new isolate, this is how to use it:
+
+isolate = new_isolate()
+
+and than calling the isolate function itself:
+
+isolate("a = 1;print a", isolate=isolate)
+
+this would run the code using our existing isolate, if you want to run the code in a new isolate you can just do this:
+
+isolate("a=1;print a")
+
+this would automaticly create a new isolate for you
+
+you can also use the isolate function as an rvalue:
+
+value = isolate("a=5;b=6;return a+b")
+
+value would be equal to 11 but both variables a and b wouldn't be created on the main stack but only on the inner stack of the new automaticly created isolate
+
+if you create an isolate your self, than you can reuse it and acces its inner stack:
+
+isolate = new_isolate()
+
+isolate(isolate=isolate,"a=1")
+
+b = isolate(isolate=isolate, "return a")
+
+print b
+
+the output would be 1
+
+with some pyeval() and pyexec() magick you can pass the main programs stack to the isolate and other interesting stuff, but i will leave it to be explored by you ;)
+
+json:
+
+pryzma has basic json functions json_dump() and json_load(), here is a simple example that should explain everythink:
+
+data = {"name": "John", "age": 30, "city": "New York"}
+
+json_string = json_dump(data)
+print json_string, "\n"
+
+data2 = json_load(json_string)
+print data2.name, "\n"
+print data2.age, "\n"
+print data2.city, "\n"
+
+json_dump(data, "tests/test.json")
+
+data3 = json_load("tests/test.json")
+
+print data3.name, "\n"
+print data3.age, "\n"
+print data3.city, "\n"
+
+remove_path("tests/test.json")
+
+pryzma provides only those two functions becouse you can treat the dictionary as
+a struct and use the functions for interacting with structs to interact with the object that it returns
+
+Running Programs:
+
+To run a Pryzma program, save the code in a text file execute it by launching the
+Pryzma interpreter and writing "file" command and providing a file path, or by launching it from command line and  providing a file path sorunded  with " like that:
+
+python Pryzma.py "file_path"
+
+License:
+
+Pryzma is open-source software released under the Apache license. See the license.txt file for more details.
+
+Author:
+
+Pryzma was created by Igor Cielniak.
+
+Support:
+
+For questions, bug reports, and feature requests, please contact me throu me email igorcielniak.contact@gmail.com or via github.
+
