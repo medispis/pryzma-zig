@@ -41,7 +41,7 @@ pub extern "c" fn Py_DecRef(obj: *PyObject) void;
 pub extern "c" fn Py_IncRef(obj: *PyObject) void;
 pub extern "c" fn PyErr_Clear() void;
 extern "c" fn PyErr_Occurred() ?*PyObject;
-extern "c" fn PyErr_Print() void;
+pub extern "c" fn PyErr_Print() void;
 extern "c" fn PyObject_IsInstance(obj: *PyObject, cls: *PyObject) c_int;
 extern "c" fn PyBytes_FromStringAndSize(s: [*]const u8, size: isize) ?*PyObject;
 extern "c" fn PyBytes_AsStringAndSize(obj: *PyObject, s: *?[*]u8, size: *isize) c_int;

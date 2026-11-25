@@ -2297,6 +2297,19 @@ pub const Interpreter = struct {
                 self.out("\n");
                 continue;
             }
+            if (std.mem.startsWith(u8, cmd, "!!")) {
+                const python = self.python orelse continue;
+                const globals = try self.pythonGlobals();
+                python.execString(std.mem.trim(u8, cmd[2..], " \t"), globals, globals) catch {
+                    py_mod.PyErr_Print();
+                    py_mod.PyErr_Clear();
+                    py_mod.Py_DecRef(globals);
+                    continue;
+                };
+                try self.copyGlobalsFromPython(globals);
+                py_mod.Py_DecRef(globals);
+                continue;
+            }
             if (std.mem.startsWith(u8, cmd, "!") and !std.mem.startsWith(u8, cmd, "!!")) {
                 const was_debugging = self.debug;
                 self.debug = false;
