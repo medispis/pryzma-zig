@@ -38,6 +38,7 @@ else
     ((failed+=1))
 fi
 rm -f "$actual"
+rm -f tests/file_write_output.tmp
 if command -v script >/dev/null 2>&1; then
     repl_output="$(printf 'print "alpha"\nhistory\nhistory print\nhistory 1\nhistory clear\nhistory\nexit\n' | script -q -c "$bin" /dev/null 2>&1)"
     if grep -Fq '1. print "alpha"' <<<"$repl_output" &&

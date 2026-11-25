@@ -581,6 +581,8 @@ pub const Interpreter = struct {
         } else if (std.mem.startsWith(u8, line, "remove_path(") and line[line.len - 1] == ')') {
             const path = try self.evalExpr(line[12 .. line.len - 1]);
             if (path == .string) std.Io.Dir.cwd().deleteFile(self.io, path.string) catch {};
+        } else if (std.mem.startsWith(u8, line, "file_write(") and line[line.len - 1] == ')') {
+            try self.fileWrite(line[11 .. line.len - 1]);
         } else if (std.mem.startsWith(u8, line, "write(") and line[line.len - 1] == ')') {
             const a = try self.splitArgs(line[6 .. line.len - 1]);
             if (a.len == 2) {
@@ -1187,6 +1189,31 @@ pub const Interpreter = struct {
         const ext = try self.allocator.create(value.ExternFn);
         ext.* = .{ .callable = start, .name = "start", .is_c = false };
         try self.setVar("__module_start", .{ .extern_fn = ext });
+    }
+
+    fn fileWrite(self: *Interpreter, args_text: []const u8) !void {
+        const args = try self.splitArgs(args_text);
+        if (args.len != 3) {
+            self.runtimeError(6, try std.fmt.allocPrint(self.allocator, "Error at line {d}: Invalid number of arguments for write()", .{self.current_line}));
+            return;
+        }
+        const path = try self.evalExpr(args[0]);
+        const mode = try self.evalExpr(args[1]);
+        const content = try self.evalExpr(args[2]);
+        const python = self.python orelse return error.PythonUnavailable;
+        const py_path = try python.toPy(path, false);
+        defer py_mod.Py_DecRef(py_path);
+        const py_mode = try python.toPy(mode, false);
+        defer py_mod.Py_DecRef(py_mode);
+        const py_content = try python.toPy(content, false);
+        defer py_mod.Py_DecRef(py_content);
+        const result = try python.callHelper("write_file", &.{ py_path, py_mode, py_content });
+        defer py_mod.Py_DecRef(result);
+        const error_text = try python.fromPy(result);
+        if (error_text == .string) {
+            const rendered_path = try value.printString(self.allocator, path);
+            self.runtimeError(15, try std.fmt.allocPrint(self.allocator, "Error at line {d} while writing to file '{s}': {s}", .{ self.current_line, rendered_path, error_text.string }));
+        }
     }
 
     fn callFromFile(self: *Interpreter, args_text: []const u8, is_c: bool) !Value {

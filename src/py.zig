@@ -344,6 +344,16 @@ pub const Py = struct {
         \\    with open(path, 'a', encoding='utf-8') as f:
         \\        f.write(text)
         \\
+        \\def write_file(path, mode, content):
+        \\    try:
+        \\        with open(path, mode) as f:
+        \\            if isinstance(content, list):
+        \\                for line in content: f.write(f"{line}\n")
+        \\            else: f.write(str(content))
+        \\        return None
+        \\    except Exception as e:
+        \\        return str(e)
+        \\
         \\def wait(t):
         \\    time.sleep(t)
         \\

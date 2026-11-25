@@ -1,0 +1,2 @@
+file_write("tests/file_write_output.tmp", "w", ["alpha", "beta"])
+print file_read("tests/file_write_output.tmp")
