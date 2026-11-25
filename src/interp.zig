@@ -2280,7 +2280,18 @@ pub const Interpreter = struct {
                 continue;
             }
             if (std.mem.eql(u8, cmd, "l")) {
-                self.printFmt("line {d}: {s}\n", .{ self.current_line, line });
+                const sorted = try self.allocator.dupe(usize, self.breakpoints.items);
+                for (sorted, 0..) |_, i| {
+                    for (i + 1..sorted.len) |j| {
+                        if (sorted[i] > sorted[j]) std.mem.swap(usize, &sorted[i], &sorted[j]);
+                    }
+                }
+                self.out("Breakpoints: [");
+                for (sorted, 0..) |bp, i| {
+                    if (i != 0) self.out(", ");
+                    self.printFmt("{d}", .{bp});
+                }
+                self.out("]\n");
                 continue;
             }
             if (std.mem.eql(u8, cmd, "v")) {
@@ -2332,7 +2343,7 @@ pub const Interpreter = struct {
             }
             if (std.mem.startsWith(u8, cmd, "b ")) {
                 const n = std.fmt.parseInt(usize, std.mem.trim(u8, cmd[2..], " \t"), 10) catch continue;
-                try self.breakpoints.append(self.allocator, n);
+                if (n != 0) try self.breakpoints.append(self.allocator, n - 1);
                 continue;
             }
             if (std.mem.startsWith(u8, cmd, "r ")) {
