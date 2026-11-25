@@ -1,6 +1,7 @@
 const std = @import("std");
 const py = @import("py.zig");
 const interp_mod = @import("interp.zig");
+const value = @import("value.zig");
 extern "c" fn isatty(c_int) c_int;
 
 pub fn main(init: std.process.Init.Minimal) !void {
@@ -280,6 +281,21 @@ fn runRepl(interpreter: *interp_mod.Interpreter, allocator: std.mem.Allocator) !
         }
         if (std.mem.eql(u8, code, "clear")) {
             try std.Io.File.stdout().writeStreamingAll(io, "\x1b[2J\x1b[H");
+            continue;
+        }
+        if (std.mem.eql(u8, code, "v")) {
+            var output: std.Io.Writer.Allocating = .init(allocator);
+            try output.writer.writeAll("variables: {");
+            var vars = interpreter.variables.iterator();
+            var first = true;
+            while (vars.next()) |entry| {
+                if (!first) try output.writer.writeAll(", ");
+                first = false;
+                const rendered = try value.repr(allocator, entry.value_ptr.*);
+                try output.writer.print("'{s}': {s}", .{ entry.key_ptr.*, rendered });
+            }
+            try output.writer.writeAll("} \n\n");
+            try std.Io.File.stdout().writeStreamingAll(io, output.written());
             continue;
         }
         if (std.mem.eql(u8, code, "cls")) {

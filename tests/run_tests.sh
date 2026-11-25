@@ -104,6 +104,15 @@ if command -v script >/dev/null 2>&1; then
         printf '%s\n' "$cls_output"
         ((failed+=1))
     fi
+    variables_output="$(printf 'answer = 42\nv\nexit\n' | script -q -c "$bin" /dev/null 2>&1)"
+    if grep -Fq "'answer': 42" <<<"$variables_output"; then
+        printf '[OK] REPL variable inspection\n'
+        ((passed+=1))
+    else
+        printf '[FAIL] REPL variable inspection\n'
+        printf '%s\n' "$variables_output"
+        ((failed+=1))
+    fi
 fi
 if command -v python3 >/dev/null 2>&1; then
     if tests/test_http_import.sh "$bin"; then
