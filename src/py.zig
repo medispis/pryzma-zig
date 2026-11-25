@@ -402,6 +402,11 @@ pub const Py = struct {
         return PyUnicode_FromStringAndSize(s.ptr, @intCast(s.len)) orelse error.PythonError;
     }
 
+    pub fn newBytes(self: *Py, s: []const u8) !*PyObject {
+        _ = self;
+        return PyBytes_FromStringAndSize(s.ptr, @intCast(s.len)) orelse error.PythonError;
+    }
+
     pub fn newInt(self: *Py, v: i64) !*PyObject {
         _ = self;
         return PyLong_FromLongLong(@intCast(v)) orelse error.PythonError;

@@ -24,5 +24,19 @@ for source in tests/*.pryzma; do
     fi
     rm -f "$actual"
 done
+actual="$(mktemp)"
+"$bin" pryzma.pryzma tests/if_test.pryzma >"$actual" 2>&1
+status=$?
+expected_text="$(cat tests/pryzma.expected)"
+actual_text="$(cat "$actual")"
+if [[ $status -eq 0 && "$expected_text" == "$actual_text" ]]; then
+    printf '[OK] pryzma self-hosted interpreter\n'
+    ((passed+=1))
+else
+    printf '[FAIL] pryzma self-hosted interpreter (exit %s)\n' "$status"
+    diff -u tests/pryzma.expected "$actual" | head -40 || true
+    ((failed+=1))
+fi
+rm -f "$actual"
 printf '%d passed, %d failed\n' "$passed" "$failed"
 ((failed == 0))

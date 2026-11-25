@@ -335,15 +335,24 @@ pub const Interpreter = struct {
             return;
         };
         if (data.len >= 3 and std.mem.eql(u8, data[0..3], "prz")) {
-            self.runtimeError(12, "Packed files require CPython support");
+            if (self.python) |python| {
+                const packed_bytes = try python.newBytes(data[3..]);
+                const unpacked_obj = try python.callHelper("lzma_decompress", &.{packed_bytes});
+                defer py_mod.Py_DecRef(unpacked_obj);
+                py_mod.Py_DecRef(packed_bytes);
+                const unpacked = try python.fromPy(unpacked_obj);
+                if (unpacked == .string) try self.preInterpret(unpacked.string);
+            } else {
+                self.runtimeError(12, "Packed files require CPython support");
+            }
             return;
         }
         try self.preInterpret(data);
     }
 
     pub fn interpret(self: *Interpreter, line_in: []const u8) anyerror!void {
-        var it = std.mem.splitScalar(u8, line_in, ';');
-        while (it.next()) |piece| {
+        const statements = try splitOutsideStrings(self, line_in, ';');
+        for (statements) |piece| {
             var line = piece;
             if (self.main_file < 1) self.no_preproc = false;
             self.main_file -= 1;
@@ -455,6 +464,25 @@ pub const Interpreter = struct {
             }
         } else if (std.mem.startsWith(u8, line, "json_dump(") and line[line.len - 1] == ')') {
             _ = try self.evalExpr(line);
+        } else if (std.mem.startsWith(u8, line, "push(") and line[line.len - 1] == ')') {
+            const args = try self.splitArgs(line[5 .. line.len - 1]);
+            if (args.len == 3) {
+                const dict_name = std.mem.trim(u8, args[0], " \t");
+                const key = try self.evalExpr(args[1]);
+                const val = try self.evalExpr(args[2]);
+                if (self.lookupVar(dict_name)) |target| {
+                    if (target == .dict) try target.dict.put(key, val);
+                }
+            }
+        } else if (std.mem.startsWith(u8, line, "dpop(") and line[line.len - 1] == ')') {
+            const args = try self.splitArgs(line[5 .. line.len - 1]);
+            if (args.len == 2) {
+                const dict_name = std.mem.trim(u8, args[0], " \t");
+                const key = try self.evalExpr(args[1]);
+                if (self.lookupVar(dict_name)) |target| {
+                    if (target == .dict) _ = target.dict.remove(key);
+                }
+            }
         } else if (std.mem.startsWith(u8, line, "remove_path(") and line[line.len - 1] == ')') {
             const path = try self.evalExpr(line[12 .. line.len - 1]);
             if (path == .string) std.Io.Dir.cwd().deleteFile(self.io, path.string) catch {};
@@ -1310,12 +1338,17 @@ pub const Interpreter = struct {
         if (isIntegerLiteral(expr)) {
             return .{ .int = std.fmt.parseInt(i64, expr, 0) catch 0 };
         }
+        if (expr.len > 1 and expr[0] == '-' and isIntegerLiteral(expr[1..])) {
+            return .{ .int = -(std.fmt.parseInt(i64, expr[1..], 0) catch 0) };
+        }
+        if (expr.len > 1 and expr[0] == '-') return value.sub(.{ .int = 0 }, try self.evalExpr(expr[1..]));
         if (expr.len >= 2 and ((expr[0] == '"' and expr[expr.len - 1] == '"') or (expr[0] == '\'' and expr[expr.len - 1] == '\''))) {
             return .{ .string = try self.dup(expr[1 .. expr.len - 1]) };
         }
         if (std.mem.eql(u8, expr, "True")) return .{ .boolean = true };
         if (std.mem.eql(u8, expr, "False")) return .{ .boolean = false };
         if (std.mem.eql(u8, expr, "None")) return .none;
+        if (std.mem.startsWith(u8, expr, "not ")) return .{ .boolean = !value.truthy(try self.evalExpr(expr[4..])) };
 
         if (std.mem.startsWith(u8, expr, "replace(") and expr[expr.len - 1] == ')') {
             const a = try self.splitArgs(expr[8 .. expr.len - 1]);
@@ -1448,8 +1481,18 @@ pub const Interpreter = struct {
                 const src = try self.evalExpr(a[1]);
                 if (sep == .string and src == .string) {
                     const result = try List.create(self.allocator);
-                    var parts = std.mem.splitSequence(u8, src.string, sep.string);
-                    while (parts.next()) |part| try result.append(.{ .string = part });
+                    const maxsplit = if (a.len >= 3) value.asInt(try self.evalExpr(a[2])) orelse -1 else -1;
+                    var start: usize = 0;
+                    var splits: i64 = 0;
+                    while (std.mem.indexOf(u8, src.string[start..], sep.string)) |relative| {
+                        if (maxsplit >= 0 and splits >= maxsplit) break;
+                        const pos = start + relative;
+                        try result.append(.{ .string = src.string[start..pos] });
+                        start = pos + sep.string.len;
+                        splits += 1;
+                        if (sep.string.len == 0) break;
+                    }
+                    try result.append(.{ .string = src.string[start..] });
                     return .{ .list = result };
                 }
             }
@@ -1480,6 +1523,45 @@ pub const Interpreter = struct {
         if (std.mem.startsWith(u8, expr, "strip(") and expr[expr.len - 1] == ')') {
             const v = try self.evalExpr(expr[6 .. expr.len - 1]);
             if (v == .string) return .{ .string = std.mem.trim(u8, v.string, " \t\r\n") };
+        }
+        if (std.mem.startsWith(u8, expr, "list(") and expr[expr.len - 1] == ')') {
+            const v = try self.evalExpr(expr[5 .. expr.len - 1]);
+            if (v == .list) return v;
+            if (v == .string) {
+                const l = try List.create(self.allocator);
+                var i: usize = 0;
+                while (i < v.string.len) {
+                    const seq_len = std.unicode.utf8ByteSequenceLength(v.string[i]) catch 1;
+                    const end = @min(i + seq_len, v.string.len);
+                    try l.append(.{ .string = v.string[i..end] });
+                    i = end;
+                }
+                return .{ .list = l };
+            }
+        }
+        if (std.mem.startsWith(u8, expr, "file_read(") and expr[expr.len - 1] == ')') {
+            const path = try self.evalExpr(expr[10 .. expr.len - 1]);
+            if (path == .string) {
+                const data = std.Io.Dir.cwd().readFileAlloc(self.io, path.string, self.allocator, .limited(64 * 1024 * 1024)) catch return .{ .string = "" };
+                return .{ .string = data };
+            }
+        }
+        if (std.mem.startsWith(u8, expr, "startswith(") and expr[expr.len - 1] == ')') {
+            const a = try self.splitArgs(expr[11 .. expr.len - 1]);
+            if (a.len == 2) {
+                const prefix = try self.evalExpr(a[0]);
+                const text = try self.evalExpr(a[1]);
+                return .{ .boolean = prefix == .string and text == .string and std.mem.startsWith(u8, text.string, prefix.string) };
+            }
+        }
+        if (std.mem.startsWith(u8, expr, "isanumber(") and isWholeCall(expr, "isanumber")) {
+            const v = try self.evalExpr(expr[10 .. expr.len - 1]);
+            if (v == .string) {
+                if (v.string.len == 0) return .{ .boolean = false };
+                for (v.string) |c| if (!std.ascii.isDigit(c)) return .{ .boolean = false };
+                return .{ .boolean = true };
+            }
+            return .{ .boolean = value.isNumber(v) };
         }
         if (std.mem.startsWith(u8, expr, "randint(") and expr[expr.len - 1] == ')') {
             const a = try self.splitArgs(expr[8 .. expr.len - 1]);
@@ -1530,7 +1612,7 @@ pub const Interpreter = struct {
             const v = try self.evalExpr(expr[5 .. expr.len - 1]);
             return .{ .string = value.typeName(v) };
         }
-        if (std.mem.startsWith(u8, expr, "char(") and expr[expr.len - 1] == ')') {
+        if (std.mem.startsWith(u8, expr, "char(") and isWholeCall(expr, "char")) {
             const v = try self.evalExpr(expr[5 .. expr.len - 1]);
             var buf: [4]u8 = undefined;
             const n = std.unicode.utf8Encode(@intCast(value.asInt(v) orelse 0), &buf) catch return .none;
@@ -1608,6 +1690,16 @@ pub const Interpreter = struct {
         }
         if (findTopLevel(expr, "==")) |p| {
             return .{ .boolean = value.eql(try self.evalExpr(expr[0..p]), try self.evalExpr(expr[p + 2 ..])) };
+        }
+        if (findTopLevel(expr, " or ")) |p| {
+            const left = try self.evalExpr(expr[0..p]);
+            if (value.truthy(left)) return left;
+            return try self.evalExpr(expr[p + 4 ..]);
+        }
+        if (findTopLevel(expr, " and ")) |p| {
+            const left = try self.evalExpr(expr[0..p]);
+            if (!value.truthy(left)) return left;
+            return try self.evalExpr(expr[p + 5 ..]);
         }
         if (findTopLevel(expr, "!=")) |p| {
             return .{ .boolean = !value.eql(try self.evalExpr(expr[0..p]), try self.evalExpr(expr[p + 2 ..])) };
@@ -1690,8 +1782,13 @@ pub const Interpreter = struct {
             var pos = bracket;
             while (pos < expr.len and expr[pos] == '[') {
                 const close = findMatching(expr, pos, '[', ']') orelse break;
-                const idx = try self.evalExpr(expr[pos + 1 .. close]);
-                obj = try self.indexValue(obj, idx);
+                const inner = expr[pos + 1 .. close];
+                if (std.mem.indexOfScalar(u8, inner, ':') != null) {
+                    obj = try self.sliceValue(obj, inner);
+                } else {
+                    const idx = try self.evalExpr(inner);
+                    obj = try self.indexValue(obj, idx);
+                }
                 pos = close + 1;
             }
             if (pos < expr.len and expr[pos] == '.') {
@@ -1719,6 +1816,48 @@ pub const Interpreter = struct {
             .dict => |d| d.keys.items.len,
             else => 0,
         };
+    }
+
+    fn sliceValue(self: *Interpreter, obj: Value, slice: []const u8) !Value {
+        const colon = std.mem.indexOfScalar(u8, slice, ':') orelse return .none;
+        const second = std.mem.indexOfScalarPos(u8, slice, colon + 1, ':');
+        const start_text = std.mem.trim(u8, slice[0..colon], " \t");
+        const stop_text = std.mem.trim(u8, slice[colon + 1 .. second orelse slice.len], " \t");
+        const step_text = if (second) |p| std.mem.trim(u8, slice[p + 1 ..], " \t") else "";
+        const step = if (step_text.len == 0) 1 else value.asInt(try self.evalExpr(step_text)) orelse 1;
+        if (step == 0) return .none;
+        const length: i64 = switch (obj) {
+            .string => |s| @intCast(s.len),
+            .list => |l| @intCast(l.len()),
+            .tuple => |l| @intCast(l.len()),
+            else => return .none,
+        };
+        var start: i64 = if (start_text.len == 0) (if (step > 0) 0 else length - 1) else value.asInt(try self.evalExpr(start_text)) orelse 0;
+        var stop: i64 = if (stop_text.len == 0) (if (step > 0) length else -1) else value.asInt(try self.evalExpr(stop_text)) orelse length;
+        if (start < 0) start += length;
+        if (stop < 0 and stop_text.len != 0) stop += length;
+        if (step > 0) {
+            start = @max(0, @min(start, length));
+            stop = @max(0, @min(stop, length));
+        } else {
+            start = @max(-1, @min(start, length - 1));
+            stop = @max(-1, @min(stop, length - 1));
+        }
+        if (obj == .string) {
+            var output: std.Io.Writer.Allocating = .init(self.allocator);
+            var i = start;
+            while (if (step > 0) i < stop else i > stop) : (i += step) {
+                if (i >= 0 and i < length) try output.writer.writeByte(obj.string[@intCast(i)]);
+            }
+            return .{ .string = try output.toOwnedSlice() };
+        }
+        const source = if (obj == .list) obj.list else obj.tuple;
+        const result = try List.create(self.allocator);
+        var i = start;
+        while (if (step > 0) i < stop else i > stop) : (i += step) {
+            if (source.get(i)) |item| try result.append(item);
+        }
+        return if (obj == .list) .{ .list = result } else .{ .tuple = result };
     }
 
     fn pythonGlobals(self: *Interpreter) !*py_mod.PyObject {
@@ -1923,6 +2062,35 @@ fn splitCommaOrPipe(interp: *Interpreter, text: []const u8) ![]const []const u8 
     return interp.splitArgs(normalized.items);
 }
 
+fn splitOutsideStrings(interp: *Interpreter, text: []const u8, delimiter: u8) ![]const []const u8 {
+    var parts: std.ArrayList([]const u8) = .empty;
+    var quote: u8 = 0;
+    var escaped = false;
+    var start: usize = 0;
+    for (text, 0..) |c, i| {
+        if (escaped) {
+            escaped = false;
+            continue;
+        }
+        if (c == '\\') {
+            escaped = true;
+            continue;
+        }
+        if (quote != 0) {
+            if (c == quote) quote = 0;
+            continue;
+        }
+        if (c == '\'' or c == '"') {
+            quote = c;
+        } else if (c == delimiter) {
+            try parts.append(interp.allocator, text[start..i]);
+            start = i + 1;
+        }
+    }
+    try parts.append(interp.allocator, text[start..]);
+    return parts.toOwnedSlice(interp.allocator);
+}
+
 const QuotedWord = struct {
     value: []const u8,
     end: usize,
@@ -1942,6 +2110,11 @@ fn parseQuotedOrWord(text: []const u8) ?QuotedWord {
     }
     const end = std.mem.indexOfAny(u8, text, " \t") orelse text.len;
     return .{ .value = text[0..end], .end = end };
+}
+
+fn isWholeCall(expr: []const u8, name: []const u8) bool {
+    if (!std.mem.startsWith(u8, expr, name) or expr.len <= name.len or expr[name.len] != '(') return false;
+    return findMatching(expr, name.len, '(', ')') == expr.len - 1;
 }
 
 fn lastPathPart(path: []const u8) []const u8 {

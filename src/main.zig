@@ -1,7 +1,7 @@
 const std = @import("std");
 const py = @import("py.zig");
 const interp_mod = @import("interp.zig");
-const value = @import("value.zig");
+extern "c" fn isatty(c_int) c_int;
 
 pub fn main(init: std.process.Init.Minimal) !void {
     const io = std.Io.Threaded.global_single_threaded.io();
@@ -12,7 +12,11 @@ pub fn main(init: std.process.Init.Minimal) !void {
 
     const args = init.args.vector;
     if (args.len <= 1) {
-        try runStdin(interpreter, allocator);
+        if (isatty(0) != 0) {
+            try runRepl(interpreter, allocator);
+        } else {
+            try runStdin(interpreter, allocator);
+        }
         return;
     }
 
@@ -34,13 +38,13 @@ pub fn main(init: std.process.Init.Minimal) !void {
     if (help) {
         try std.Io.File.stdout().writeStreamingAll(io,
             \\flags:
-            \\    -d  debug mode (not yet implemented)
+            \\    -d  debug mode
             \\    -p  preprocess only
             \\    -np no preprocessing
             \\    -l  execute a single line
             \\    -fd forward declare functions
-            \\    -pk pack a file (not yet implemented)
-            \\    -upk unpack a file (not yet implemented)
+            \\    -pk pack a file
+            \\    -upk unpack a file
             \\
         );
         return;
@@ -58,12 +62,43 @@ pub fn main(init: std.process.Init.Minimal) !void {
         return;
     }
     if (packed_mode) |mode| {
-        _ = mode;
-        try std.Io.File.stderr().writeStreamingAll(io, "Packing flags are not implemented yet.\n");
+        const data = try std.Io.Dir.cwd().readFileAlloc(io, file, allocator, .limited(64 * 1024 * 1024));
+        if (std.mem.eql(u8, mode, "-pk")) {
+            const source = try interpreter.preprocess(data);
+            var body: std.Io.Writer.Allocating = .init(allocator);
+            try body.writer.writeAll("#np;");
+            for (source, 0..) |statement, i| {
+                if (i != 0) try body.writer.writeByte(';');
+                try body.writer.writeAll(statement);
+            }
+            const text = try body.toOwnedSlice();
+            const py_text = try p.newString(text);
+            const compressed = try p.callHelper("lzma_compress", &.{py_text});
+            defer py.Py_DecRef(compressed);
+            const bytes = try p.fromPy(compressed);
+            if (bytes == .string) {
+                try std.Io.File.stdout().writeStreamingAll(io, "prz");
+                try std.Io.File.stdout().writeStreamingAll(io, bytes.string);
+            }
+            py.Py_DecRef(py_text);
+        } else {
+            if (!std.mem.startsWith(u8, data, "prz")) {
+                try std.Io.File.stderr().writeStreamingAll(io, "Can't decompress data\n");
+                return;
+            }
+            const py_bytes = try p.newBytes(data[3..]);
+            const text = try p.callHelper("lzma_decompress", &.{py_bytes});
+            defer py.Py_DecRef(text);
+            const unpacked = try p.fromPy(text);
+            if (unpacked == .string) {
+                try std.Io.File.stdout().writeStreamingAll(io, unpacked.string);
+                try std.Io.File.stdout().writeStreamingAll(io, "\n");
+            }
+            py.Py_DecRef(py_bytes);
+        }
         return;
     }
     try interpreter.interpretFile(file, script_args.items);
-    _ = value.Value.none;
 }
 
 fn runStdin(interpreter: *interp_mod.Interpreter, allocator: std.mem.Allocator) !void {
@@ -71,4 +106,42 @@ fn runStdin(interpreter: *interp_mod.Interpreter, allocator: std.mem.Allocator) 
     var reader = std.Io.File.stdin().reader(interpreter.io, &buf);
     const contents = try reader.interface.allocRemaining(allocator, .unlimited);
     if (contents.len != 0) try interpreter.preInterpret(contents);
+}
+
+fn runRepl(interpreter: *interp_mod.Interpreter, allocator: std.mem.Allocator) !void {
+    const io = interpreter.io;
+    try std.Io.File.stdout().writeStreamingAll(io,
+        \\Pryzma 6.2
+        \\To show the license type "license" or "help" to get help.
+        \\
+    );
+    var buf: [4096]u8 = undefined;
+    var reader = std.Io.File.stdin().reader(io, &buf);
+    while (true) {
+        try std.Io.File.stdout().writeStreamingAll(io, "/// ");
+        const line = (try reader.interface.takeDelimiter('\n')) orelse break;
+        const code = std.mem.trim(u8, line, " \t\r");
+        if (std.mem.eql(u8, code, "exit")) break;
+        if (std.mem.eql(u8, code, "help")) {
+            try std.Io.File.stdout().writeStreamingAll(io,
+                \\Commands: help, license, history, info, errors, cls, clear, exit
+                \\Enter Pryzma statements to execute them.
+                \\
+            );
+            continue;
+        }
+        if (std.mem.eql(u8, code, "license")) {
+            const license_text = std.Io.Dir.cwd().readFileAlloc(io, "license.txt", allocator, .limited(1024 * 1024)) catch "License file not found.";
+            try std.Io.File.stdout().writeStreamingAll(io, license_text);
+            try std.Io.File.stdout().writeStreamingAll(io, "\n");
+            continue;
+        }
+        if (std.mem.eql(u8, code, "clear")) {
+            try std.Io.File.stdout().writeStreamingAll(io, "\x1b[2J\x1b[H");
+            continue;
+        }
+        if (code.len == 0) continue;
+        const statements = try interpreter.preprocess(code);
+        for (statements) |statement| try interpreter.interpret(statement);
+    }
 }
