@@ -317,6 +317,21 @@ fn runRepl(interpreter: *interp_mod.Interpreter, allocator: std.mem.Allocator) !
             try std.Io.File.stdout().writeStreamingAll(io, output.written());
             continue;
         }
+        if (std.mem.eql(u8, code, "s")) {
+            var output: std.Io.Writer.Allocating = .init(allocator);
+            try output.writer.writeAll("structs: {");
+            var structs = interpreter.structs.iterator();
+            var first = true;
+            while (structs.next()) |entry| {
+                if (!first) try output.writer.writeAll(", ");
+                first = false;
+                const rendered = try value.repr(allocator, .{ .dict = entry.value_ptr.* });
+                try output.writer.print("'{s}': {s}", .{ entry.key_ptr.*, rendered });
+            }
+            try output.writer.writeAll("} \n\n");
+            try std.Io.File.stdout().writeStreamingAll(io, output.written());
+            continue;
+        }
         if (std.mem.eql(u8, code, "cls")) {
             interpreter.variables.clearRetainingCapacity();
             interpreter.functions.clearRetainingCapacity();

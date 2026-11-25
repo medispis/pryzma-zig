@@ -123,6 +123,16 @@ if command -v script >/dev/null 2>&1; then
         printf '%s\n' "$functions_output"
         ((failed+=1))
     fi
+    structs_output="$(printf 'struct Point{x = 1|y = 2}\ns\nexit\n' | script -q -c "$bin" /dev/null 2>&1)"
+    if grep -Fq "'Point':" <<<"$structs_output" &&
+       grep -Fq "'x': 1" <<<"$structs_output"; then
+        printf '[OK] REPL struct inspection\n'
+        ((passed+=1))
+    else
+        printf '[FAIL] REPL struct inspection\n'
+        printf '%s\n' "$structs_output"
+        ((failed+=1))
+    fi
 fi
 if command -v python3 >/dev/null 2>&1; then
     if tests/test_http_import.sh "$bin"; then
