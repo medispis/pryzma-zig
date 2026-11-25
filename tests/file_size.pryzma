@@ -1,0 +1,1 @@
+print file_size("tests/lists_test.pryzma")

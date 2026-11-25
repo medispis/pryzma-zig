@@ -2098,6 +2098,13 @@ pub const Interpreter = struct {
                 return .{ .boolean = true };
             }
         }
+        if (std.mem.startsWith(u8, expr, "file_size(") and isWholeCall(expr, "file_size")) {
+            const path = try self.evalExpr(expr[10 .. expr.len - 1]);
+            if (path == .string) {
+                const stat = std.Io.Dir.cwd().statFile(self.io, path.string, .{}) catch return .none;
+                return .{ .int = @intCast(stat.size) };
+            }
+        }
         if (std.mem.startsWith(u8, expr, "startswith(") and expr[expr.len - 1] == ')') {
             const a = try self.splitArgs(expr[11 .. expr.len - 1]);
             if (a.len == 2) {
