@@ -2285,6 +2285,14 @@ pub const Interpreter = struct {
                 return .{ .boolean = prefix == .string and text == .string and std.mem.startsWith(u8, text.string, prefix.string) };
             }
         }
+        if (std.mem.startsWith(u8, expr, "endswith(") and isWholeCall(expr, "endswith")) {
+            const a = try self.splitArgs(expr[9 .. expr.len - 1]);
+            if (a.len == 2) {
+                const suffix = try self.evalExpr(a[0]);
+                const text = try self.evalExpr(a[1]);
+                return .{ .boolean = suffix == .string and text == .string and std.mem.endsWith(u8, text.string, suffix.string) };
+            }
+        }
         if (std.mem.startsWith(u8, expr, "isanumber(") and isWholeCall(expr, "isanumber")) {
             const v = try self.evalExpr(expr[10 .. expr.len - 1]);
             if (v == .string) {

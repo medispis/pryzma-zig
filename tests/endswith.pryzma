@@ -1,0 +1,2 @@
+print endswith(".pryzma", "tests/lists_test.pryzma")
+print endswith(".zig", "tests/lists_test.pryzma")
