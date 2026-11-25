@@ -1860,6 +1860,12 @@ pub const Interpreter = struct {
         if (std.mem.eql(u8, expr, "True")) return .{ .boolean = true };
         if (std.mem.eql(u8, expr, "False")) return .{ .boolean = false };
         if (std.mem.eql(u8, expr, "None")) return .none;
+        if (std.mem.eql(u8, expr, "timenow")) {
+            const python = self.python orelse return .none;
+            const result = try python.callHelper("now_datetime", &.{});
+            defer py_mod.Py_DecRef(result);
+            return try python.fromPy(result);
+        }
         if (std.mem.startsWith(u8, expr, "not ")) return .{ .boolean = !value.truthy(try self.evalExpr(expr[4..])) };
 
         if (std.mem.startsWith(u8, expr, "replace(") and expr[expr.len - 1] == ')') {
@@ -2349,6 +2355,12 @@ pub const Interpreter = struct {
         }
         if (std.mem.startsWith(u8, expr, "type(") and expr[expr.len - 1] == ')') {
             const v = try self.evalExpr(expr[5 .. expr.len - 1]);
+            if (v == .py_object) {
+                const python = self.python orelse return .{ .string = "python object" };
+                const result = try python.callHelper("type_name", &.{@ptrCast(v.py_object)});
+                defer py_mod.Py_DecRef(result);
+                return try python.fromPy(result);
+            }
             return .{ .string = value.typeName(v) };
         }
         if (std.mem.startsWith(u8, expr, "char(") and isWholeCall(expr, "char")) {
