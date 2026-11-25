@@ -678,6 +678,30 @@ pub const Interpreter = struct {
                 const result = try python.callHelper("wait", &.{py_duration});
                 py_mod.Py_DecRef(result);
             }
+        } else if (std.mem.startsWith(u8, line, "move(") and line[line.len - 1] == ')') {
+            const args = try self.splitArgs(line[5 .. line.len - 1]);
+            if (args.len != 3) {
+                self.runtimeError(7, try std.fmt.allocPrint(self.allocator, "Error at line {d}: Invalid move instruction syntax. Expected format: move(old index, new index, list name)", .{self.current_line}));
+                return;
+            }
+            const old_index = std.fmt.parseInt(i64, std.mem.trim(u8, args[0], " \t"), 10) catch {
+                self.runtimeError(8, try std.fmt.allocPrint(self.allocator, "Error at line {d}: Invalid index", .{self.current_line}));
+                return;
+            };
+            const new_index = std.fmt.parseInt(i64, std.mem.trim(u8, args[1], " \t"), 10) catch {
+                self.runtimeError(8, try std.fmt.allocPrint(self.allocator, "Error at line {d}: Invalid index", .{self.current_line}));
+                return;
+            };
+            const list_name = std.mem.trim(u8, args[2], " \t");
+            if (self.lookupVar(list_name)) |target| {
+                if (target == .list) {
+                    if (target.list.popAt(old_index)) |item| {
+                        const len: i64 = @intCast(target.list.len());
+                        const normalized = if (new_index < 0) @max(0, len + new_index) else @min(len, new_index);
+                        try target.list.insertAt(@intCast(normalized), item);
+                    }
+                }
+            }
         } else if (std.mem.startsWith(u8, line, "write(") and line[line.len - 1] == ')') {
             const a = try self.splitArgs(line[6 .. line.len - 1]);
             if (a.len == 2) {

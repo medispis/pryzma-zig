@@ -1,0 +1,5 @@
+items = ["a", "b", "c", "d"]
+move(0, 2, items)
+print items
+move(-1, 0, items)
+print items
