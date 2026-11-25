@@ -1,0 +1,3 @@
+print dirname("tests/lists_test.pryzma")
+print "|"
+print dirname("lists_test.pryzma")
