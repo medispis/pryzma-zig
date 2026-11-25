@@ -583,6 +583,16 @@ pub const Interpreter = struct {
             if (path == .string) std.Io.Dir.cwd().deleteFile(self.io, path.string) catch {};
         } else if (std.mem.startsWith(u8, line, "file_write(") and line[line.len - 1] == ')') {
             try self.fileWrite(line[11 .. line.len - 1]);
+        } else if (std.mem.startsWith(u8, line, "sys(") and line[line.len - 1] == ')') {
+            const command = try self.evalExpr(line[4 .. line.len - 1]);
+            if (command == .string) {
+                if (self.python) |python| {
+                    const py_command = try python.newString(command.string);
+                    defer py_mod.Py_DecRef(py_command);
+                    const result = try python.callHelper("sys_call", &.{py_command});
+                    py_mod.Py_DecRef(result);
+                }
+            }
         } else if (std.mem.startsWith(u8, line, "write(") and line[line.len - 1] == ')') {
             const a = try self.splitArgs(line[6 .. line.len - 1]);
             if (a.len == 2) {
