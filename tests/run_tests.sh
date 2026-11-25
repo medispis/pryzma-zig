@@ -114,6 +114,21 @@ else
     printf '%s\n' "$copy_method_output"
     ((failed+=1))
 fi
+rename_source="$mkdir_tmp/rename-source.txt"
+rename_destination="$mkdir_tmp/rename-destination.txt"
+rename_program="$mkdir_tmp/rename.pryzma"
+printf 'rename parity source\n' >"$rename_source"
+printf 'rename("%s", "%s")\n' "$rename_source" "$rename_destination" >"$rename_program"
+rename_output="$("$bin" "$rename_program" 2>&1)"
+if [[ -z "$rename_output" && ! -e "$rename_source" && -f "$rename_destination" ]] &&
+   grep -Fq 'rename parity source' "$rename_destination"; then
+    printf '[OK] rename statement\n'
+    ((passed+=1))
+else
+    printf '[FAIL] rename statement\n'
+    printf '%s\n' "$rename_output"
+    ((failed+=1))
+fi
 rm -rf "$mkdir_tmp"
 if command -v script >/dev/null 2>&1; then
     repl_output="$(printf 'print "alpha"\nhistory\nhistory print\nhistory 1\nhistory clear\nhistory\nexit\n' | script -q -c "$bin" /dev/null 2>&1)"
