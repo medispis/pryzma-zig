@@ -2145,6 +2145,17 @@ pub const Interpreter = struct {
                 return .{ .tuple = parts };
             }
         }
+        if (std.mem.startsWith(u8, expr, "join_path(") and isWholeCall(expr, "join_path")) {
+            const args = try self.splitArgs(expr[10 .. expr.len - 1]);
+            var paths: std.ArrayList([]const u8) = .empty;
+            for (args) |arg| {
+                const part = try self.evalExpr(arg);
+                if (part != .string) return .none;
+                try paths.append(self.allocator, part.string);
+            }
+            if (paths.items.len == 0) return .{ .string = "" };
+            return .{ .string = try std.fs.path.join(self.allocator, paths.items) };
+        }
         if (std.mem.startsWith(u8, expr, "startswith(") and expr[expr.len - 1] == ')') {
             const a = try self.splitArgs(expr[11 .. expr.len - 1]);
             if (a.len == 2) {

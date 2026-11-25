@@ -1,0 +1,3 @@
+path = join_path("tests", "lists_test.pryzma")
+print path
+print exists(path)
