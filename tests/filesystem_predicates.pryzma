@@ -1,0 +1,4 @@
+print is_file("tests/lists_test.pryzma")
+print is_dir("tests")
+print exists("tests/lists_test.pryzma")
+print exists("tests/no_such_entry")

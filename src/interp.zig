@@ -2077,6 +2077,27 @@ pub const Interpreter = struct {
                 return .{ .string = data };
             }
         }
+        if (std.mem.startsWith(u8, expr, "is_file(") and isWholeCall(expr, "is_file")) {
+            const path = try self.evalExpr(expr[8 .. expr.len - 1]);
+            if (path == .string) {
+                const stat = std.Io.Dir.cwd().statFile(self.io, path.string, .{}) catch return .{ .boolean = false };
+                return .{ .boolean = stat.kind == .file };
+            }
+        }
+        if (std.mem.startsWith(u8, expr, "is_dir(") and isWholeCall(expr, "is_dir")) {
+            const path = try self.evalExpr(expr[7 .. expr.len - 1]);
+            if (path == .string) {
+                const stat = std.Io.Dir.cwd().statFile(self.io, path.string, .{}) catch return .{ .boolean = false };
+                return .{ .boolean = stat.kind == .directory };
+            }
+        }
+        if (std.mem.startsWith(u8, expr, "exists(") and isWholeCall(expr, "exists")) {
+            const path = try self.evalExpr(expr[7 .. expr.len - 1]);
+            if (path == .string) {
+                _ = std.Io.Dir.cwd().statFile(self.io, path.string, .{}) catch return .{ .boolean = false };
+                return .{ .boolean = true };
+            }
+        }
         if (std.mem.startsWith(u8, expr, "startswith(") and expr[expr.len - 1] == ')') {
             const a = try self.splitArgs(expr[11 .. expr.len - 1]);
             if (a.len == 2) {
