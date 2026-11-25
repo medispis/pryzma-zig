@@ -143,6 +143,19 @@ else
     printf '%s\n' "$symlink_output"
     ((failed+=1))
 fi
+unlink_target="$mkdir_tmp/unlink-me.txt"
+unlink_program="$mkdir_tmp/unlink.pryzma"
+printf 'unlink parity\n' >"$unlink_target"
+printf 'unlink("%s")\n' "$unlink_target" >"$unlink_program"
+unlink_output="$("$bin" "$unlink_program" 2>&1)"
+if [[ -z "$unlink_output" && ! -e "$unlink_target" ]]; then
+    printf '[OK] unlink statement\n'
+    ((passed+=1))
+else
+    printf '[FAIL] unlink statement\n'
+    printf '%s\n' "$unlink_output"
+    ((failed+=1))
+fi
 rm -rf "$mkdir_tmp"
 if command -v script >/dev/null 2>&1; then
     repl_output="$(printf 'print "alpha"\nhistory\nhistory print\nhistory 1\nhistory clear\nhistory\nexit\n' | script -q -c "$bin" /dev/null 2>&1)"
