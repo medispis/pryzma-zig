@@ -1,0 +1,9 @@
+use "./tests/import_helper.pryzma"
+@import_helper.greet("local")
+print "\n"
+from "./tests/import_helper.pryzma" use greet as welcome
+@welcome("selected")
+print "\n"
+sum = call("./tests/call_helper.py", "add", 3, 4)
+print sum
+print "\n"

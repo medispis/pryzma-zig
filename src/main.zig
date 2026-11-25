@@ -25,7 +25,10 @@ pub fn main(init: std.process.Init.Minimal) !void {
 
     const file = std.mem.span(args[1]);
     var script_args: std.ArrayList([]const u8) = .empty;
-    for (args[1..]) |arg| try script_args.append(allocator, std.mem.span(arg));
+    for (args[1..]) |arg| {
+        const text = std.mem.span(arg);
+        if (!std.mem.eql(u8, text, "-upi")) try script_args.append(allocator, text);
+    }
     var line_mode = false;
     var help = false;
     var packed_mode: ?[]const u8 = null;
@@ -49,6 +52,7 @@ pub fn main(init: std.process.Init.Minimal) !void {
             \\    -fd forward declare functions
             \\    -pk pack a file
             \\    -upk unpack a file
+            \\    -upi unpack and interpret a file
             \\
         );
         return;
@@ -102,6 +106,8 @@ pub fn main(init: std.process.Init.Minimal) !void {
         }
         return;
     }
+    // Packed files are detected and unpacked by interpretFile. This flag is
+    // retained for compatibility with the reference CLI.
     try interpreter.interpretFile(file, script_args.items);
 }
 
