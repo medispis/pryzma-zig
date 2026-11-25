@@ -1946,7 +1946,8 @@ pub const Interpreter = struct {
                 const src = try self.evalExpr(a[0]);
                 if (src == .string) {
                     const python = self.python orelse return .none;
-                    const globals = try self.pythonGlobals();
+                    const namespace = if (a.len > 1) try self.evalExpr(a[1]) else .none;
+                    const globals = if (namespace == .dict) try self.pythonNamespace(namespace) else try self.pythonGlobals();
                     const result = python.evalString(src.string, globals, globals) catch {
                         py_mod.PyErr_Clear();
                         py_mod.Py_DecRef(globals);
@@ -1977,9 +1978,14 @@ pub const Interpreter = struct {
                 const src = try self.evalExpr(a[0]);
                 if (src == .string) {
                     const python = self.python orelse return .none;
-                    const globals = try self.pythonGlobals();
+                    const namespace = if (a.len > 1) try self.evalExpr(a[1]) else .none;
+                    const globals = if (namespace == .dict) try self.pythonNamespace(namespace) else try self.pythonGlobals();
                     python.execString(src.string, globals, globals) catch py_mod.PyErr_Clear();
-                    try self.copyGlobalsFromPython(globals);
+                    if (namespace == .dict) {
+                        try self.copyPythonDictToValue(globals, namespace.dict);
+                    } else {
+                        try self.copyGlobalsFromPython(globals);
+                    }
                     py_mod.Py_DecRef(globals);
                 }
             }
@@ -2399,6 +2405,35 @@ pub const Interpreter = struct {
             py_mod.Py_DecRef(val);
         }
         return dict;
+    }
+
+    fn pythonNamespace(self: *Interpreter, namespace: Value) !*py_mod.PyObject {
+        const python = self.python orelse return error.PythonUnavailable;
+        if (namespace != .dict) return error.PythonError;
+        const dict = py_mod.PyDict_New() orelse return error.PythonError;
+        for (namespace.dict.keys.items, namespace.dict.values.items) |key_value, item_value| {
+            if (key_value != .string) continue;
+            const key = try self.allocator.allocSentinel(u8, key_value.string.len, 0);
+            @memcpy(key, key_value.string);
+            const item = try python.toPy(item_value, false);
+            defer py_mod.Py_DecRef(item);
+            _ = py_mod.PyDict_SetItemString(dict, key, item);
+        }
+        return dict;
+    }
+
+    fn copyPythonDictToValue(self: *Interpreter, source: *py_mod.PyObject, destination: *value.Dict) !void {
+        const python = self.python orelse return;
+        destination.keys.clearRetainingCapacity();
+        destination.values.clearRetainingCapacity();
+        var pos: isize = 0;
+        var key: ?*py_mod.PyObject = null;
+        var item: ?*py_mod.PyObject = null;
+        while (py_mod.PyDict_Next(source, &pos, &key, &item) != 0) {
+            const converted_key = try python.fromPy(key.?);
+            const converted_value = try python.fromPy(item.?);
+            try destination.put(converted_key, converted_value);
+        }
     }
 
     fn copyGlobalsFromPython(self: *Interpreter, dict: *py_mod.PyObject) !void {

@@ -1,0 +1,3 @@
+scope = {"answer": 40}
+pyexec("answer = answer + 2", scope)
+print pyeval("answer", scope)
