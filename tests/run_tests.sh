@@ -172,6 +172,31 @@ if command -v script >/dev/null 2>&1; then
         printf '%s\n' "$if_debug_output"
         ((failed+=1))
     fi
+    for_debug_output="$(printf 'debug\ntests/debug_for.pryzma\ns\ns\ns\ns\nexit\n' | script -q -c "$bin" /dev/null 2>&1)"
+    loop_steps="$(grep -Fc 'Debug: Executing line 2: print i' <<<"$for_debug_output" || true)"
+    if [[ "$loop_steps" == 2 ]] &&
+       grep -Fq 'Debug: Executing line 4: print "after loop"' <<<"$for_debug_output" &&
+       grep -Fq 'after loop' <<<"$for_debug_output"; then
+        printf '[OK] debugger for-loop iteration stepping\n'
+        ((passed+=1))
+    else
+        printf '[FAIL] debugger for-loop iteration stepping\n'
+        printf '%s\n' "$for_debug_output"
+        ((failed+=1))
+    fi
+    for_continue_output="$(printf 'debug\ntests/debug_for_continue.pryzma\nc\ns\nc\ns\ns\ns\nexit\n' | script -q -c "$bin" /dev/null 2>&1)"
+    loop_value_steps="$(grep -Fc 'Debug: Executing line 2: print i' <<<"$for_continue_output" || true)"
+    loop_tail_steps="$(grep -Fc 'Debug: Executing line 3: print "tail"' <<<"$for_continue_output" || true)"
+    if [[ "$loop_value_steps" == 2 && "$loop_tail_steps" == 2 ]] &&
+       [[ "$(grep -Fc 'debug> tail' <<<"$for_continue_output" || true)" == 2 ]] &&
+       grep -Fq 'after loop' <<<"$for_continue_output"; then
+        printf '[OK] debugger continue resumes at next loop iteration\n'
+        ((passed+=1))
+    else
+        printf '[FAIL] debugger continue resumes at next loop iteration\n'
+        printf '%s\n' "$for_continue_output"
+        ((failed+=1))
+    fi
     debug_log="$(mktemp)"
     printf 'debug\ntests/repl_debug.pryzma\nhelp\nclear\nlog\n%s\ns\nexit\n' "$debug_log" |
         script -q -c "$bin" /dev/null >/dev/null 2>&1

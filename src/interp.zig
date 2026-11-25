@@ -1325,10 +1325,12 @@ pub const Interpreter = struct {
         const body = rest[close_paren + open + 1 .. close];
         try self.break_stack.append(self.allocator, false);
         defer _ = self.break_stack.pop();
+        if (self.debug_continue) self.debug_continue = false;
         while (true) {
             const cv = try self.evalExpr(cond);
             if (!value.truthy(cv)) break;
             try self.runBody(body);
+            if (self.debug_continue) self.debug_continue = false;
             if (self.break_stack.items[self.break_stack.items.len - 1]) break;
         }
     }
@@ -1349,12 +1351,15 @@ pub const Interpreter = struct {
         const end_v = value.asInt(try self.evalExpr(range[colon + 1 ..])) orelse 0;
         try self.break_stack.append(self.allocator, false);
         defer _ = self.break_stack.pop();
+        const was_in_loop = self.in_loop;
         self.in_loop = true;
-        defer self.in_loop = false;
+        defer self.in_loop = was_in_loop;
+        if (self.debug_continue) self.debug_continue = false;
         var i = start_v;
         while (i < end_v) : (i += 1) {
             try self.setVar(var_name, .{ .int = i });
             try self.runBody(body);
+            if (self.debug_continue) self.debug_continue = false;
             if (self.break_stack.items[self.break_stack.items.len - 1]) break;
         }
     }
@@ -1384,9 +1389,14 @@ pub const Interpreter = struct {
         };
         try self.break_stack.append(self.allocator, false);
         defer _ = self.break_stack.pop();
+        const was_in_loop = self.in_loop;
+        self.in_loop = true;
+        defer self.in_loop = was_in_loop;
+        if (self.debug_continue) self.debug_continue = false;
         for (list.items.items) |item| {
             try self.setVar(var_name, item);
             try self.runBody(body);
+            if (self.debug_continue) self.debug_continue = false;
             if (self.break_stack.items[self.break_stack.items.len - 1]) break;
         }
     }
