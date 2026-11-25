@@ -76,7 +76,7 @@ pub const Interpreter = struct {
 
     file_path: []const u8 = "",
     stdin_buf: [65536]u8 = undefined,
-    stdin_reader: ?std.Io.Reader = null,
+    stdin_reader: ?std.Io.File.Reader = null,
 
     pub fn init(allocator: Allocator, io: std.Io, python: ?*py_mod.Py) !*Interpreter {
         const self = try allocator.create(Interpreter);
@@ -312,7 +312,24 @@ pub const Interpreter = struct {
                     const bstr = try value.printString(self.allocator, bv);
                     var replaced_lines: std.ArrayList([]const u8) = .empty;
                     for (lines) |line| {
-                        try replaced_lines.append(self.allocator, try std.mem.replaceOwned(u8, self.allocator, line, astr, bstr));
+                        if (self.python) |python| {
+                            const pattern = try python.newString(astr);
+                            const replacement = try python.newString(bstr);
+                            const source = try python.newString(line);
+                            const result = try python.callHelper("re_sub", &.{ pattern, replacement, source });
+                            const converted = try python.fromPy(result);
+                            if (converted == .string) {
+                                try replaced_lines.append(self.allocator, converted.string);
+                            } else {
+                                try replaced_lines.append(self.allocator, line);
+                            }
+                            py_mod.Py_DecRef(pattern);
+                            py_mod.Py_DecRef(replacement);
+                            py_mod.Py_DecRef(source);
+                            py_mod.Py_DecRef(result);
+                        } else {
+                            try replaced_lines.append(self.allocator, try std.mem.replaceOwned(u8, self.allocator, line, astr, bstr));
+                        }
                     }
                     lines = try replaced_lines.toOwnedSlice(self.allocator);
                 }
@@ -390,6 +407,10 @@ pub const Interpreter = struct {
     fn interpretStatement(self: *Interpreter, line: []const u8) anyerror!void {
         if (std.mem.startsWith(u8, line, "print")) {
             try self.printValue(line[5..]);
+        } else if (std.mem.startsWith(u8, line, "input")) {
+            try self.inputStatement(line[5..]);
+        } else if (std.mem.startsWith(u8, line, "assert")) {
+            try self.assertStatement(line[6..]);
         } else if (std.mem.startsWith(u8, line, "struct ")) {
             try self.defineStruct(line);
         } else if (std.mem.startsWith(u8, line, "{") and std.mem.indexOfScalar(u8, line, '=') != null) {
@@ -462,6 +483,36 @@ pub const Interpreter = struct {
                     if (v == .list) try v.list.append(try self.evalExpr(args[1]));
                 }
             }
+        } else if (std.mem.startsWith(u8, line, "copy ")) {
+            const args = try self.splitArgs(line[5..]);
+            if (args.len == 2) {
+                const src = self.lookupVar(std.mem.trim(u8, args[0], " \t")) orelse .none;
+                const dst = self.lookupVar(std.mem.trim(u8, args[1], " \t")) orelse .none;
+                if (src == .list and dst == .list) try dst.list.appendSlice(src.list.items.items);
+            }
+        } else if (std.mem.startsWith(u8, line, "remove ") and !std.mem.startsWith(u8, line, "remove_path(")) {
+            const args = try self.splitArgs(line[7..]);
+            if (args.len == 2) {
+                const list_name = std.mem.trim(u8, args[0], " \t");
+                if (self.lookupVar(list_name)) |list| {
+                    if (list == .list) _ = list.list.removeValue(try self.evalExpr(args[1]));
+                }
+            }
+        } else if (std.mem.startsWith(u8, line, "pyexec(") and line[line.len - 1] == ')') {
+            _ = try self.evalExpr(line);
+        } else if (std.mem.startsWith(u8, line, "pyeval(") and line[line.len - 1] == ')') {
+            _ = try self.evalExpr(line);
+        } else if ((std.mem.startsWith(u8, line, "py{") or std.mem.startsWith(u8, line, "py {")) and line[line.len - 1] == '}') {
+            try self.execPythonBlock(line);
+        } else if (std.mem.startsWith(u8, line, "exec(") and line[line.len - 1] == ')') {
+            const args = try self.splitArgs(line[5 .. line.len - 1]);
+            for (args) |arg| {
+                const code = try self.evalExpr(arg);
+                if (code == .string) try self.preInterpret(code.string);
+            }
+        } else if (std.mem.startsWith(u8, line, "eval(") and line[line.len - 1] == ')') {
+            const args = try self.splitArgs(line[5 .. line.len - 1]);
+            for (args) |arg| _ = try self.evalExpr(arg);
         } else if (std.mem.startsWith(u8, line, "json_dump(") and line[line.len - 1] == ')') {
             _ = try self.evalExpr(line);
         } else if (std.mem.startsWith(u8, line, "push(") and line[line.len - 1] == ')') {
@@ -670,6 +721,17 @@ pub const Interpreter = struct {
 
     fn processPragma(self: *Interpreter, line: []const u8) !void {
         const pragma = std.mem.trim(u8, line[1..], " \t");
+        if (std.mem.startsWith(u8, pragma, "insert")) {
+            const path = try self.evalExpr(std.mem.trim(u8, pragma[6..], " \t"));
+            if (path == .string) {
+                const data = std.Io.Dir.cwd().readFileAlloc(self.io, path.string, self.allocator, .limited(64 * 1024 * 1024)) catch {
+                    self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "File '{s}' not found.", .{path.string}));
+                    return;
+                };
+                try self.preInterpret(data);
+            }
+            return;
+        }
         if (std.mem.startsWith(u8, pragma, "replace")) {
             return;
         }
@@ -733,6 +795,48 @@ pub const Interpreter = struct {
             }
         }
         try self.structs.put(try self.dup(name), d);
+    }
+
+    fn inputStatement(self: *Interpreter, line_in: []const u8) !void {
+        const line = std.mem.trim(u8, line_in, " \t");
+        const sep = std.mem.indexOf(u8, line, "::");
+        const name = std.mem.trim(u8, if (sep) |p| line[0..p] else line, " \t");
+        var prompt: []const u8 = "";
+        if (sep) |p| {
+            const prompt_val = try self.evalExpr(std.mem.trim(u8, line[p + 2 ..], " \t"));
+            if (prompt_val == .string) prompt = prompt_val.string;
+        }
+        try self.setVar(name, .{ .string = try self.inputLine(prompt) });
+    }
+
+    fn assertStatement(self: *Interpreter, text: []const u8) !void {
+        const args = try self.splitArgs(std.mem.trim(u8, text, " \t"));
+        if (args.len < 2) return;
+        const condition = try self.evalExpr(args[0]);
+        if (!value.truthy(condition)) {
+            const message = try self.evalExpr(args[1]);
+            const rendered = try value.printString(self.allocator, message);
+            self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: AssertionError: {s}", .{ self.current_line, rendered }));
+        }
+    }
+
+    fn execPythonBlock(self: *Interpreter, line: []const u8) !void {
+        const start: usize = if (std.mem.startsWith(u8, line, "py{")) 3 else 4;
+        const python = self.python orelse return;
+        const parts = try self.splitPipes(line[start .. line.len - 1]);
+        var code: std.Io.Writer.Allocating = .init(self.allocator);
+        for (parts, 0..) |part, i| {
+            const statement = std.mem.trim(u8, part, " \t\r\n");
+            if (statement.len == 0) continue;
+            const evaluated = try self.evalExpr(statement);
+            const source = try value.printString(self.allocator, evaluated);
+            if (i != 0) try code.writer.writeByte(';');
+            try code.writer.writeAll(source);
+        }
+        const globals = try self.pythonGlobals();
+        python.execString(try code.toOwnedSlice(), globals, globals) catch py_mod.PyErr_Clear();
+        try self.copyGlobalsFromPython(globals);
+        py_mod.Py_DecRef(globals);
     }
 
     fn usingValue(self: *Interpreter, line: []const u8) !void {
@@ -1968,7 +2072,7 @@ pub const Interpreter = struct {
     pub fn inputLine(self: *Interpreter, prompt: []const u8) ![]const u8 {
         if (prompt.len != 0) self.out(prompt);
         if (self.stdin_reader == null) self.stdin_reader = std.Io.File.stdin().reader(self.io, &self.stdin_buf);
-        const line = self.stdin_reader.?.takeDelimiter('\n') catch return "";
+        const line = self.stdin_reader.?.interface.takeDelimiter('\n') catch return "";
         if (line) |l| return try self.dup(l);
         return "";
     }
