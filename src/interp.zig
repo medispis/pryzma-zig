@@ -637,6 +637,17 @@ pub const Interpreter = struct {
                     };
                 }
             }
+        } else if (std.mem.startsWith(u8, line, "symlink(") and line[line.len - 1] == ')') {
+            const args = try self.splitArgs(line[8 .. line.len - 1]);
+            if (args.len == 2) {
+                const target = try self.evalExpr(args[0]);
+                const link_path = try self.evalExpr(args[1]);
+                if (target == .string and link_path == .string) {
+                    std.Io.Dir.cwd().symLink(self.io, target.string, link_path.string, .{}) catch |err| {
+                        self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: {s}", .{ self.current_line, @errorName(err) }));
+                    };
+                }
+            }
         } else if (std.mem.startsWith(u8, line, "remove_path(") and line[line.len - 1] == ')') {
             const path = try self.evalExpr(line[12 .. line.len - 1]);
             if (path == .string) std.Io.Dir.cwd().deleteFile(self.io, path.string) catch {};

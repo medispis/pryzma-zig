@@ -129,6 +129,20 @@ else
     printf '%s\n' "$rename_output"
     ((failed+=1))
 fi
+symlink_target="$mkdir_tmp/symlink-target.txt"
+symlink_path="$mkdir_tmp/symlink-path.txt"
+symlink_program="$mkdir_tmp/symlink.pryzma"
+printf 'symlink parity target\n' >"$symlink_target"
+printf 'symlink("%s", "%s")\n' "$symlink_target" "$symlink_path" >"$symlink_program"
+symlink_output="$("$bin" "$symlink_program" 2>&1)"
+if [[ -z "$symlink_output" && -L "$symlink_path" ]] && cmp -s "$symlink_target" "$symlink_path"; then
+    printf '[OK] symlink statement\n'
+    ((passed+=1))
+else
+    printf '[FAIL] symlink statement\n'
+    printf '%s\n' "$symlink_output"
+    ((failed+=1))
+fi
 rm -rf "$mkdir_tmp"
 if command -v script >/dev/null 2>&1; then
     repl_output="$(printf 'print "alpha"\nhistory\nhistory print\nhistory 1\nhistory clear\nhistory\nexit\n' | script -q -c "$bin" /dev/null 2>&1)"
