@@ -2169,6 +2169,21 @@ pub const Interpreter = struct {
                 return .{ .list = result };
             }
         }
+        if (std.mem.startsWith(u8, expr, "is_link(") and isWholeCall(expr, "is_link")) {
+            const path = try self.evalExpr(expr[8 .. expr.len - 1]);
+            if (path == .string) {
+                const stat = std.Io.Dir.cwd().statFile(self.io, path.string, .{ .follow_symlinks = false }) catch return .{ .boolean = false };
+                return .{ .boolean = stat.kind == .sym_link };
+            }
+        }
+        if (std.mem.startsWith(u8, expr, "read_link(") and isWholeCall(expr, "read_link")) {
+            const path = try self.evalExpr(expr[10 .. expr.len - 1]);
+            if (path == .string) {
+                var buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+                const len = try std.Io.Dir.cwd().readLink(self.io, path.string, &buffer);
+                return .{ .string = try self.dup(buffer[0..len]) };
+            }
+        }
         if (std.mem.startsWith(u8, expr, "startswith(") and expr[expr.len - 1] == ')') {
             const a = try self.splitArgs(expr[11 .. expr.len - 1]);
             if (a.len == 2) {

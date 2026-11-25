@@ -133,9 +133,11 @@ symlink_target="$mkdir_tmp/symlink-target.txt"
 symlink_path="$mkdir_tmp/symlink-path.txt"
 symlink_program="$mkdir_tmp/symlink.pryzma"
 printf 'symlink parity target\n' >"$symlink_target"
-printf 'symlink("%s", "%s")\n' "$symlink_target" "$symlink_path" >"$symlink_program"
+printf 'symlink("%s", "%s")\nprint is_link("%s")\nprint read_link("%s")\n' \
+    "$symlink_target" "$symlink_path" "$symlink_path" "$symlink_path" >"$symlink_program"
 symlink_output="$("$bin" "$symlink_program" 2>&1)"
-if [[ -z "$symlink_output" && -L "$symlink_path" ]] && cmp -s "$symlink_target" "$symlink_path"; then
+if [[ "$symlink_output" == "True$symlink_target" && -L "$symlink_path" ]] &&
+   cmp -s "$symlink_target" "$symlink_path"; then
     printf '[OK] symlink statement\n'
     ((passed+=1))
 else
