@@ -1,0 +1,2 @@
+print abs_path(".") == abs_path("./tests/..")
+print exists(abs_path("tests"))
