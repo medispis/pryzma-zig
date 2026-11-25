@@ -670,6 +670,14 @@ pub const Interpreter = struct {
                     py_mod.Py_DecRef(result);
                 }
             }
+        } else if (std.mem.startsWith(u8, line, "wait(") and line[line.len - 1] == ')') {
+            const duration = try self.evalExpr(line[5 .. line.len - 1]);
+            if (self.python) |python| {
+                const py_duration = try python.toPy(duration, false);
+                defer py_mod.Py_DecRef(py_duration);
+                const result = try python.callHelper("wait", &.{py_duration});
+                py_mod.Py_DecRef(result);
+            }
         } else if (std.mem.startsWith(u8, line, "write(") and line[line.len - 1] == ')') {
             const a = try self.splitArgs(line[6 .. line.len - 1]);
             if (a.len == 2) {
@@ -1812,6 +1820,9 @@ pub const Interpreter = struct {
             return .{ .lazy = lazy };
         }
 
+        if (std.mem.indexOfAny(u8, expr, ".eE") != null) {
+            if (std.fmt.parseFloat(f64, expr)) |number| return .{ .float = number } else |_| {}
+        }
         if (isIntegerLiteral(expr)) {
             return .{ .int = std.fmt.parseInt(i64, expr, 0) catch 0 };
         }
