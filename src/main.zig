@@ -298,6 +298,25 @@ fn runRepl(interpreter: *interp_mod.Interpreter, allocator: std.mem.Allocator) !
             try std.Io.File.stdout().writeStreamingAll(io, output.written());
             continue;
         }
+        if (std.mem.eql(u8, code, "f")) {
+            var output: std.Io.Writer.Allocating = .init(allocator);
+            try output.writer.writeAll("functions: {");
+            var funcs = interpreter.functions.iterator();
+            var first = true;
+            while (funcs.next()) |entry| {
+                if (!first) try output.writer.writeAll(", ");
+                first = false;
+                const body = try value.List.create(allocator);
+                for (entry.value_ptr.*.body.items) |line_text| {
+                    try body.append(.{ .string = line_text });
+                }
+                const rendered = try value.repr(allocator, .{ .list = body });
+                try output.writer.print("'{s}': {s}", .{ entry.key_ptr.*, rendered });
+            }
+            try output.writer.writeAll("} \n\n");
+            try std.Io.File.stdout().writeStreamingAll(io, output.written());
+            continue;
+        }
         if (std.mem.eql(u8, code, "cls")) {
             interpreter.variables.clearRetainingCapacity();
             interpreter.functions.clearRetainingCapacity();

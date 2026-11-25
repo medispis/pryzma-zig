@@ -113,6 +113,16 @@ if command -v script >/dev/null 2>&1; then
         printf '%s\n' "$variables_output"
         ((failed+=1))
     fi
+    functions_output="$(printf '/hello{print "hi"}\nf\nexit\n' | script -q -c "$bin" /dev/null 2>&1)"
+    if grep -Fq "'hello':" <<<"$functions_output" &&
+       grep -Fq 'print' <<<"$functions_output"; then
+        printf '[OK] REPL function inspection\n'
+        ((passed+=1))
+    else
+        printf '[FAIL] REPL function inspection\n'
+        printf '%s\n' "$functions_output"
+        ((failed+=1))
+    fi
 fi
 if command -v python3 >/dev/null 2>&1; then
     if tests/test_http_import.sh "$bin"; then
