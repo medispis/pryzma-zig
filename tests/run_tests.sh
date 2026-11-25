@@ -63,6 +63,16 @@ if command -v script >/dev/null 2>&1; then
         printf '%s\n' "$info_output"
         ((failed+=1))
     fi
+    errors_output="$(printf 'errors\nexit\n' | script -q -c "$bin" /dev/null 2>&1)"
+    if grep -Fq '1 - Error keyword deleted' <<<"$errors_output" &&
+       grep -Fq '44 - Field not found on object.' <<<"$errors_output"; then
+        printf '[OK] REPL error-code table\n'
+        ((passed+=1))
+    else
+        printf '[FAIL] REPL error-code table\n'
+        printf '%s\n' "$errors_output"
+        ((failed+=1))
+    fi
 fi
 printf '%d passed, %d failed\n' "$passed" "$failed"
 ((failed == 0))

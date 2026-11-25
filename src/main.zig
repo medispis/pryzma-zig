@@ -202,6 +202,57 @@ fn runRepl(interpreter: *interp_mod.Interpreter, allocator: std.mem.Allocator) !
             if (info == .string) try std.Io.File.stdout().writeStreamingAll(io, info.string);
             continue;
         }
+        if (std.mem.eql(u8, code, "errors")) {
+            try std.Io.File.stdout().writeStreamingAll(io,
+                \\
+                \\1 - Error keyword deleted
+                \\2 - Invalid function definition
+                \\3 - Function not defined
+                \\4 - Too much arguments for +=
+                \\5 - Too much arguments for -=
+                \\6 - Invalid number of arguments for write()
+                \\7 - Invalid move() instruction syntax
+                \\8 - Invalid index for move() instruction
+                \\9 - Invalid swap() instruction syntax
+                \\10 - Invalid index for swap() instruction
+                \\11 - Invalid statement
+                \\12 - Unknown error
+                \\13 - Module does not have a 'start' function.
+                \\14 - Error loading module
+                \\15 - Error writing to file
+                \\16 - Invalid number of arguments for replace function
+                \\17 - Invalid number of arguments for resplit function
+                \\18 - The first argument of resplit() must be a string (regex pattern).
+                \\19 - The second argument of resplit() must be a string.
+                \\20 - Invalid regex pattern.
+                \\21 - in() function error
+                \\22 - Invalid number of arguments for splitby function
+                \\23 - File not found
+                \\24 - Invalid number of arguments for index function
+                \\25 - Value not found in list for index function
+                \\26 - Variable is not a list for index function
+                \\27 - List not defined for all()
+                \\28 - Unknown variable or expression
+                \\29 - Invalid range expression for loop
+                \\30 - File not found for use function
+                \\31 - List does not exist for append function
+                \\32 - Index out of range for pop function
+                \\33 - List does not exist for pop function
+                \\34 - Invalid number of arguments for call.
+                \\35 - Invalid call statement format.
+                \\36 - Variable not found in current scope.
+                \\37 - Referenced variable no longer exists.
+                \\38 - Referenced function no longer exists.
+                \\39 - Overlaping names of struct instance and one of variables used for destructuring.
+                \\40 - Name of a non existing function pased as an argument to patch()
+                \\41 - List not found for the foreach function.
+                \\42 - 'using' statement can only be used with struct instances.
+                \\43 - Indexing Error.
+                \\44 - Field not found on object.
+                \\
+            );
+            continue;
+        }
         if (std.mem.eql(u8, code, "clear")) {
             try std.Io.File.stdout().writeStreamingAll(io, "\x1b[2J\x1b[H");
             continue;
