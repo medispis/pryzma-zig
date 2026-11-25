@@ -39,6 +39,20 @@ else
 fi
 rm -f "$actual"
 rm -f tests/file_write_output.tmp
+mkdir_tmp="$(mktemp -d)"
+mkdir_target="$mkdir_tmp/created"
+mkdir_source="$mkdir_tmp/mkdir.pryzma"
+printf 'mkdir("%s")\n' "$mkdir_target" >"$mkdir_source"
+mkdir_output="$("$bin" "$mkdir_source" 2>&1)"
+if [[ -d "$mkdir_target" && -z "$mkdir_output" ]]; then
+    printf '[OK] mkdir statement\n'
+    ((passed+=1))
+else
+    printf '[FAIL] mkdir statement\n'
+    printf '%s\n' "$mkdir_output"
+    ((failed+=1))
+fi
+rm -rf "$mkdir_tmp"
 if command -v script >/dev/null 2>&1; then
     repl_output="$(printf 'print "alpha"\nhistory\nhistory print\nhistory 1\nhistory clear\nhistory\nexit\n' | script -q -c "$bin" /dev/null 2>&1)"
     if grep -Fq '1. print "alpha"' <<<"$repl_output" &&
