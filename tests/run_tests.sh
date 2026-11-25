@@ -160,6 +160,19 @@ if command -v script >/dev/null 2>&1; then
         printf '%s\n' "$breakpoint_output"
         ((failed+=1))
     fi
+    debug_log="$(mktemp)"
+    printf 'debug\ntests/repl_debug.pryzma\nlog\n%s\ns\nexit\n' "$debug_log" |
+        script -q -c "$bin" /dev/null >/dev/null 2>&1
+    if grep -Fq "Log file set to: $debug_log" "$debug_log" &&
+       grep -Fq 'User chose to step.' "$debug_log"; then
+        printf '[OK] debugger logging\n'
+        ((passed+=1))
+    else
+        printf '[FAIL] debugger logging\n'
+        cat "$debug_log"
+        ((failed+=1))
+    fi
+    rm -f "$debug_log"
 fi
 if command -v python3 >/dev/null 2>&1; then
     if tests/test_http_import.sh "$bin"; then

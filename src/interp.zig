@@ -62,6 +62,8 @@ pub const Interpreter = struct {
     debug: bool = false,
     debug_continue: bool = false,
     debug_step_once: bool = false,
+    debug_log_file: ?[]const u8 = null,
+    debug_session_started: bool = false,
     unpack_: bool = false,
     in_loop: bool = false,
     main_file: i64 = 1,
@@ -2258,6 +2260,11 @@ pub const Interpreter = struct {
         } else if (self.breakpoints.items.len != 0 and !at_breakpoint) {
             return;
         }
+        if (!self.debug_session_started) {
+            self.debug_session_started = true;
+            try self.logDebug("Debugger started.");
+        }
+        try self.logDebug(try std.fmt.allocPrint(self.allocator, "Executing line {d}: {s}", .{ self.current_line, line }));
         self.printFmt("Debug: Executing line {d}: {s}\n", .{ self.current_line, line });
         while (self.debug) {
             self.out("debug> ");
@@ -2265,10 +2272,12 @@ pub const Interpreter = struct {
             const cmd = std.mem.trim(u8, raw, " \t\r\n");
             if (std.mem.eql(u8, cmd, "s") or std.mem.eql(u8, cmd, "")) {
                 self.debug_step_once = true;
+                try self.logDebug("User chose to step.");
                 return;
             }
             if (std.mem.eql(u8, cmd, "c")) {
                 self.debug_continue = true;
+                try self.logDebug("User chose to continue to the next breakpoint.");
                 return;
             }
             if (std.mem.eql(u8, cmd, "exit")) {
@@ -2323,7 +2332,8 @@ pub const Interpreter = struct {
             if (std.mem.startsWith(u8, cmd, "!!")) {
                 const python = self.python orelse continue;
                 const globals = try self.pythonGlobals();
-                python.execString(std.mem.trim(u8, cmd[2..], " \t"), globals, globals) catch {
+                const code = std.mem.trim(u8, cmd[2..], " \t");
+                python.execString(code, globals, globals) catch {
                     py_mod.PyErr_Print();
                     py_mod.PyErr_Clear();
                     py_mod.Py_DecRef(globals);
@@ -2331,29 +2341,55 @@ pub const Interpreter = struct {
                 };
                 try self.copyGlobalsFromPython(globals);
                 py_mod.Py_DecRef(globals);
+                try self.logDebug(try std.fmt.allocPrint(self.allocator, "Run code: {s}", .{code}));
                 continue;
             }
             if (std.mem.startsWith(u8, cmd, "!") and !std.mem.startsWith(u8, cmd, "!!")) {
                 const was_debugging = self.debug;
                 self.debug = false;
-                try self.interpret(std.mem.trim(u8, cmd[1..], " \t"));
+                const code = std.mem.trim(u8, cmd[1..], " \t");
+                try self.interpret(code);
                 self.debug = was_debugging;
+                try self.logDebug(try std.fmt.allocPrint(self.allocator, "Run code: {s}", .{code}));
                 self.out("\n\n");
                 continue;
             }
             if (std.mem.startsWith(u8, cmd, "b ")) {
                 const n = std.fmt.parseInt(usize, std.mem.trim(u8, cmd[2..], " \t"), 10) catch continue;
-                if (n != 0) try self.breakpoints.append(self.allocator, n - 1);
+                if (n != 0) {
+                    try self.breakpoints.append(self.allocator, n - 1);
+                    try self.logDebug(try std.fmt.allocPrint(self.allocator, "Breakpoint added at line {d}.", .{n}));
+                }
                 continue;
             }
             if (std.mem.startsWith(u8, cmd, "r ")) {
                 const n = std.fmt.parseInt(usize, std.mem.trim(u8, cmd[2..], " \t"), 10) catch continue;
                 for (self.breakpoints.items, 0..) |bp, i| if (bp == n) {
                     _ = self.breakpoints.orderedRemove(i);
+                    try self.logDebug(try std.fmt.allocPrint(self.allocator, "Breakpoint removed at line {d}.", .{n}));
                     break;
                 };
             }
+            if (std.mem.eql(u8, cmd, "log")) {
+                self.out("Enter log file name (press Enter for 'log.txt'): ");
+                const requested = std.mem.trim(u8, try self.inputLine(""), " \t\r\n");
+                self.debug_log_file = try self.dup(if (requested.len == 0) "log.txt" else requested);
+                self.printFmt("Logging to {s}\n", .{self.debug_log_file.?});
+                try self.logDebug(try std.fmt.allocPrint(self.allocator, "Log file set to: {s}", .{self.debug_log_file.?}));
+                continue;
+            }
         }
+    }
+
+    fn logDebug(self: *Interpreter, message: []const u8) !void {
+        const path = self.debug_log_file orelse return;
+        const python = self.python orelse return;
+        const path_obj = try python.newString(path);
+        defer py_mod.Py_DecRef(path_obj);
+        const text_obj = try python.newString(try std.fmt.allocPrint(self.allocator, "{s}\n", .{message}));
+        defer py_mod.Py_DecRef(text_obj);
+        const result = try python.callHelper("append_text", &.{ path_obj, text_obj });
+        py_mod.Py_DecRef(result);
     }
 
     pub fn ppmCommand(self: *Interpreter, command_line: []const u8) !void {

@@ -201,6 +201,8 @@ fn runRepl(interpreter: *interp_mod.Interpreter, allocator: std.mem.Allocator) !
             const path_line = (try reader.interface.takeDelimiter('\n')) orelse break;
             const path = std.mem.trim(u8, path_line, " \t\r\"");
             if (!std.mem.eql(u8, path, "exit")) {
+                interpreter.debug_log_file = null;
+                interpreter.debug_session_started = false;
                 interpreter.debug = true;
                 try interpreter.interpretFile(path, &.{});
                 interpreter.debug = false;

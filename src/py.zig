@@ -340,6 +340,10 @@ pub const Py = struct {
         \\def sys_call(cmd):
         \\    return os.system(cmd)
         \\
+        \\def append_text(path, text):
+        \\    with open(path, 'a', encoding='utf-8') as f:
+        \\        f.write(text)
+        \\
         \\def wait(t):
         \\    time.sleep(t)
         \\
