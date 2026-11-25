@@ -1,0 +1,2 @@
+print join("-", ["alpha", "beta", "gamma"])
+print join("|", "xyz")

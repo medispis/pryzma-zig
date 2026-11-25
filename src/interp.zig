@@ -2241,6 +2241,42 @@ pub const Interpreter = struct {
                 else => false,
             } };
         }
+        if (std.mem.startsWith(u8, expr, "join(") and isWholeCall(expr, "join")) {
+            const args = try self.splitArgs(expr[5 .. expr.len - 1]);
+            if (args.len != 2) return .none;
+            const separator = try self.evalExpr(args[0]);
+            const sequence = try self.evalExpr(args[1]);
+            if (separator != .string) return .none;
+
+            var output: std.Io.Writer.Allocating = .init(self.allocator);
+            var first = true;
+            const appendItem = struct {
+                fn run(writer: *std.Io.Writer, sep: []const u8, is_first: *bool, item: []const u8) !void {
+                    if (!is_first.*) try writer.writeAll(sep);
+                    try writer.writeAll(item);
+                    is_first.* = false;
+                }
+            }.run;
+            switch (sequence) {
+                .string => |text| {
+                    var offset: usize = 0;
+                    while (offset < text.len) {
+                        const width = std.unicode.utf8ByteSequenceLength(text[offset]) catch 1;
+                        const end = @min(offset + width, text.len);
+                        try appendItem(&output.writer, separator.string, &first, text[offset..end]);
+                        offset = end;
+                    }
+                },
+                .list, .tuple => |items| {
+                    for (items.items.items) |item| {
+                        if (item != .string) return .none;
+                        try appendItem(&output.writer, separator.string, &first, item.string);
+                    }
+                },
+                else => return .none,
+            }
+            return .{ .string = try output.toOwnedSlice() };
+        }
         if (std.mem.startsWith(u8, expr, "startswith(") and expr[expr.len - 1] == ')') {
             const a = try self.splitArgs(expr[11 .. expr.len - 1]);
             if (a.len == 2) {
