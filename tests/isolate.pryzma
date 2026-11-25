@@ -1,0 +1,6 @@
+isolated = new_isolate()
+isolate(isolate=isolated, "isolated_value = 23")
+isolate(isolate=isolated, "print isolated_value")
+print isolated_value
+isolated_return = isolate("return 31")
+print isolated_return

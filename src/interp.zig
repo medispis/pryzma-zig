@@ -533,6 +533,8 @@ pub const Interpreter = struct {
         } else if (std.mem.startsWith(u8, line, "eval(") and line[line.len - 1] == ')') {
             const args = try self.splitArgs(line[5 .. line.len - 1]);
             for (args) |arg| _ = try self.evalExpr(arg);
+        } else if (std.mem.startsWith(u8, line, "isolate(") and line[line.len - 1] == ')') {
+            _ = try self.evalExpr(line);
         } else if (std.mem.startsWith(u8, line, "json_dump(") and line[line.len - 1] == ')') {
             _ = try self.evalExpr(line);
         } else if (std.mem.startsWith(u8, line, "push(") and line[line.len - 1] == ')') {
@@ -1226,6 +1228,34 @@ pub const Interpreter = struct {
         }
     }
 
+    fn runIsolated(self: *Interpreter, args_text: []const u8) !Value {
+        const args = try self.splitArgs(args_text);
+        var isolated: ?*Interpreter = null;
+        var code_args: std.ArrayList([]const u8) = .empty;
+        for (args) |arg_in| {
+            const arg = std.mem.trim(u8, arg_in, " \t");
+            if (std.mem.startsWith(u8, arg, "isolate")) {
+                if (std.mem.indexOfScalar(u8, arg, '=')) |equals| {
+                    const name = std.mem.trim(u8, arg[equals + 1 ..], " \t");
+                    if (self.lookupVar(name)) |candidate| {
+                        if (candidate == .isolate) isolated = @ptrCast(@alignCast(candidate.isolate));
+                    }
+                    continue;
+                }
+            }
+            try code_args.append(self.allocator, arg);
+        }
+        if (isolated == null) isolated = try Interpreter.init(self.allocator, self.io, self.python);
+        for (code_args.items) |code_arg| {
+            const code = try self.evalExpr(code_arg);
+            if (code != .string) continue;
+            isolated.?.ret_val = .none;
+            try isolated.?.preInterpret(code.string);
+            if (isolated.?.ret_val != .none) return isolated.?.ret_val;
+        }
+        return .none;
+    }
+
     fn callFromFile(self: *Interpreter, args_text: []const u8, is_c: bool) !Value {
         const args = try self.splitArgs(args_text);
         if (args.len < 2) return .none;
@@ -1787,6 +1817,13 @@ pub const Interpreter = struct {
                     return try python.fromPy(result);
                 }
             }
+        }
+        if (std.mem.startsWith(u8, expr, "new_isolate(") and isWholeCall(expr, "new_isolate")) {
+            const isolated = try Interpreter.init(self.allocator, self.io, self.python);
+            return .{ .isolate = @ptrCast(isolated) };
+        }
+        if (std.mem.startsWith(u8, expr, "isolate(") and isWholeCall(expr, "isolate")) {
+            return try self.runIsolated(expr[8 .. expr.len - 1]);
         }
         if (std.mem.startsWith(u8, expr, "call(") and isWholeCall(expr, "call")) {
             return try self.callFromFile(expr[5 .. expr.len - 1], false);
