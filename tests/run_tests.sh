@@ -64,6 +64,21 @@ else
     printf '%s\n' "$makedirs_output"
     ((failed+=1))
 fi
+walk_root="$mkdir_tmp/walk-root"
+mkdir -p "$walk_root/child"
+printf 'root\n' >"$walk_root/root.txt"
+printf 'child\n' >"$walk_root/child/child.txt"
+walk_program="$mkdir_tmp/walk.pryzma"
+printf 'rows = walk("%s")\nprint len(rows)\nprint rows[0][0]\n' "$walk_root" >"$walk_program"
+walk_output="$("$bin" "$walk_program" 2>&1)"
+if [[ "$walk_output" == "2$walk_root" ]]; then
+    printf '[OK] walk expression\n'
+    ((passed+=1))
+else
+    printf '[FAIL] walk expression\n'
+    printf '%s\n' "$walk_output"
+    ((failed+=1))
+fi
 rmdir_target="$mkdir_tmp/remove-me"
 rmdir_source="$mkdir_tmp/rmdir.pryzma"
 printf 'mkdir("%s")\nrmdir("%s")\n' "$rmdir_target" "$rmdir_target" >"$rmdir_source"

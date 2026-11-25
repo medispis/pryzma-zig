@@ -2169,6 +2169,14 @@ pub const Interpreter = struct {
                 return .{ .list = result };
             }
         }
+        if (std.mem.startsWith(u8, expr, "walk(") and isWholeCall(expr, "walk")) {
+            const path = try self.evalExpr(expr[5 .. expr.len - 1]);
+            if (path == .string) {
+                const result = try value.List.create(self.allocator);
+                try self.walkDirectory(path.string, result);
+                return .{ .list = result };
+            }
+        }
         if (std.mem.startsWith(u8, expr, "is_link(") and isWholeCall(expr, "is_link")) {
             const path = try self.evalExpr(expr[8 .. expr.len - 1]);
             if (path == .string) {
@@ -2515,6 +2523,36 @@ pub const Interpreter = struct {
             if (source.get(i)) |item| try result.append(item);
         }
         return if (obj == .list) .{ .list = result } else .{ .tuple = result };
+    }
+
+    fn walkDirectory(self: *Interpreter, path: []const u8, result: *value.List) !void {
+        const dir = try std.Io.Dir.cwd().openDir(self.io, path, .{ .iterate = true });
+        defer dir.close(self.io);
+
+        const dirnames = try value.List.create(self.allocator);
+        const filenames = try value.List.create(self.allocator);
+        var child_names: std.ArrayList([]const u8) = .empty;
+        var iterator = dir.iterate();
+        while (try iterator.next(self.io)) |entry| {
+            const name = try self.dup(entry.name);
+            if (entry.kind == .directory) {
+                try dirnames.append(.{ .string = name });
+                try child_names.append(self.allocator, name);
+            } else {
+                try filenames.append(.{ .string = name });
+            }
+        }
+
+        const row = try value.List.create(self.allocator);
+        try row.append(.{ .string = try self.dup(path) });
+        try row.append(.{ .list = dirnames });
+        try row.append(.{ .list = filenames });
+        try result.append(.{ .tuple = row });
+
+        for (child_names.items) |child_name| {
+            const child_path = try std.fs.path.join(self.allocator, &.{ path, child_name });
+            try self.walkDirectory(child_path, result);
+        }
     }
 
     fn pythonGlobals(self: *Interpreter) !*py_mod.PyObject {
