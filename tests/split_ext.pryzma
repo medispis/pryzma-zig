@@ -1,0 +1,2 @@
+print split_ext("archive.tar.gz")
+print split_ext(".profile")

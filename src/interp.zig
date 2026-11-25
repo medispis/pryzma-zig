@@ -2128,6 +2128,23 @@ pub const Interpreter = struct {
                 return .{ .string = try std.fs.path.resolveAlloc(self.allocator, &.{ cwd, path.string }) };
             }
         }
+        if (std.mem.startsWith(u8, expr, "split_ext(") and isWholeCall(expr, "split_ext")) {
+            const path = try self.evalExpr(expr[10 .. expr.len - 1]);
+            if (path == .string) {
+                const base = std.fs.path.basename(path.string);
+                var extension_start: ?usize = null;
+                if (std.mem.lastIndexOfScalar(u8, base, '.')) |dot| {
+                    if (dot > 0 and std.mem.trim(u8, base[0..dot], ".").len > 0) {
+                        extension_start = path.string.len - base.len + dot;
+                    }
+                }
+                const split = extension_start orelse path.string.len;
+                const parts = try value.List.create(self.allocator);
+                try parts.append(.{ .string = path.string[0..split] });
+                try parts.append(.{ .string = path.string[split..] });
+                return .{ .tuple = parts };
+            }
+        }
         if (std.mem.startsWith(u8, expr, "startswith(") and expr[expr.len - 1] == ')') {
             const a = try self.splitArgs(expr[11 .. expr.len - 1]);
             if (a.len == 2) {
