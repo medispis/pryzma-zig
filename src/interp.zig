@@ -554,6 +554,9 @@ pub const Interpreter = struct {
                     if (target == .dict) _ = target.dict.remove(key);
                 }
             }
+        } else if (std.mem.startsWith(u8, line, "delvar(") and line[line.len - 1] == ')') {
+            const target = try self.evalExpr(line[7 .. line.len - 1]);
+            if (target == .string) _ = self.variables.remove(target.string);
         } else if (std.mem.startsWith(u8, line, "remove_path(") and line[line.len - 1] == ')') {
             const path = try self.evalExpr(line[12 .. line.len - 1]);
             if (path == .string) std.Io.Dir.cwd().deleteFile(self.io, path.string) catch {};

@@ -1,0 +1,3 @@
+x = 9
+delvar("x")
+print x
