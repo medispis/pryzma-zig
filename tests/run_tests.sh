@@ -133,6 +133,17 @@ if command -v script >/dev/null 2>&1; then
         printf '%s\n' "$structs_output"
         ((failed+=1))
     fi
+    locals_output="$(printf '#ngc\n/locals_probe{loc saved_local = 17}\n@locals_probe\nl\nexit\n' | script -q -c "$bin" /dev/null 2>&1)"
+    if grep -Fq "'saved_local':" <<<"$locals_output" &&
+       grep -Fq '17' <<<"$locals_output" &&
+       grep -Fq 'locals_probe' <<<"$locals_output"; then
+        printf '[OK] REPL local-variable inspection\n'
+        ((passed+=1))
+    else
+        printf '[FAIL] REPL local-variable inspection\n'
+        printf '%s\n' "$locals_output"
+        ((failed+=1))
+    fi
 fi
 if command -v python3 >/dev/null 2>&1; then
     if tests/test_http_import.sh "$bin"; then

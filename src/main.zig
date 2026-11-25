@@ -332,6 +332,30 @@ fn runRepl(interpreter: *interp_mod.Interpreter, allocator: std.mem.Allocator) !
             try std.Io.File.stdout().writeStreamingAll(io, output.written());
             continue;
         }
+        if (std.mem.eql(u8, code, "l")) {
+            var output: std.Io.Writer.Allocating = .init(allocator);
+            try output.writer.writeAll("locals: {");
+            var locals = interpreter.locals.iterator();
+            var first_name = true;
+            while (locals.next()) |entry| {
+                if (!first_name) try output.writer.writeAll(", ");
+                first_name = false;
+                try output.writer.print("'{s}': [", .{entry.key_ptr.*});
+                for (entry.value_ptr.items, 0..) |local_entry, index| {
+                    if (index != 0) try output.writer.writeAll(", ");
+                    const rendered = try value.repr(allocator, local_entry.val);
+                    if (local_entry.func_name) |function_name| {
+                        try output.writer.print("({s}, \"{s}\", {d})", .{ rendered, function_name, local_entry.func_id });
+                    } else {
+                        try output.writer.print("({s}, None, {d})", .{ rendered, local_entry.func_id });
+                    }
+                }
+                try output.writer.writeByte(']');
+            }
+            try output.writer.writeAll("} \n\n");
+            try std.Io.File.stdout().writeStreamingAll(io, output.written());
+            continue;
+        }
         if (std.mem.eql(u8, code, "cls")) {
             interpreter.variables.clearRetainingCapacity();
             interpreter.functions.clearRetainingCapacity();
