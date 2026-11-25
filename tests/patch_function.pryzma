@@ -1,0 +1,4 @@
+/target{print "old"}
+/replacement{print "patched"}
+patch("target", "replacement")
+@target

@@ -677,6 +677,23 @@ pub const Interpreter = struct {
                 const data = value.asInt(try self.evalExpr(a[1])) orelse 0;
                 if (addr >= 0 and addr < self.mem.len) self.mem[@intCast(addr)] = @truncate(@as(u64, @bitCast(data)));
             }
+        } else if (std.mem.startsWith(u8, line, "patch(") and line[line.len - 1] == ')') {
+            const args = try self.splitArgs(line[6 .. line.len - 1]);
+            if (args.len == 2) {
+                const target = try self.evalExpr(args[0]);
+                const replacement = try self.evalExpr(args[1]);
+                if (target == .string and replacement == .string) {
+                    if (self.functions.get(replacement.string)) |function| {
+                        if (self.functions.contains(target.string)) {
+                            try self.functions.put(try self.dup(target.string), function);
+                        } else {
+                            self.runtimeError(40, "Name of a non existing function pased as an argument to patch()");
+                        }
+                    } else {
+                        self.runtimeError(40, "Name of a non existing function pased as an argument to patch()");
+                    }
+                }
+            }
         } else if (std.mem.startsWith(u8, line, "pop ")) {
             const args = try self.splitArgs(line[4..]);
             if (args.len == 2) {
