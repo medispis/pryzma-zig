@@ -2264,7 +2264,7 @@ pub const Interpreter = struct {
                 return;
             }
             if (std.mem.eql(u8, cmd, "help")) {
-                self.out("Commands: s (step), c (continue), b N (breakpoint), r N (remove), v, f, l, exit\n");
+                self.out("Commands: s (step), c (continue), b N (breakpoint), r N (remove), v, f, st, l, exit\n");
                 continue;
             }
             if (std.mem.eql(u8, cmd, "l")) {
@@ -2282,6 +2282,19 @@ pub const Interpreter = struct {
             if (std.mem.eql(u8, cmd, "f")) {
                 var funcs = self.functions.iterator();
                 while (funcs.next()) |entry| self.printFmt("{s}\n", .{entry.key_ptr.*});
+                continue;
+            }
+            if (std.mem.eql(u8, cmd, "st")) {
+                self.out("Structs: ");
+                var structs = self.structs.iterator();
+                var first = true;
+                while (structs.next()) |entry| {
+                    if (!first) self.out(", ");
+                    first = false;
+                    const rendered = try value.repr(self.allocator, .{ .dict = entry.value_ptr.* });
+                    self.printFmt("{s}: {s}", .{ entry.key_ptr.*, rendered });
+                }
+                self.out("\n");
                 continue;
             }
             if (std.mem.startsWith(u8, cmd, "b ")) {
