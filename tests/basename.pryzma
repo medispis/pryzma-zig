@@ -1,0 +1,3 @@
+print basename("tests/lists_test.pryzma")
+print "|"
+print basename("tests/")

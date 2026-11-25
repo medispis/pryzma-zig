@@ -2111,6 +2111,15 @@ pub const Interpreter = struct {
                 return .{ .string = std.fs.path.dirname(path.string) orelse "" };
             }
         }
+        if (std.mem.startsWith(u8, expr, "basename(") and isWholeCall(expr, "basename")) {
+            const path = try self.evalExpr(expr[9 .. expr.len - 1]);
+            if (path == .string) {
+                if (path.string.len != 0 and std.fs.path.isSep(path.string[path.string.len - 1])) {
+                    return .{ .string = "" };
+                }
+                return .{ .string = std.fs.path.basename(path.string) };
+            }
+        }
         if (std.mem.startsWith(u8, expr, "startswith(") and expr[expr.len - 1] == ')') {
             const a = try self.splitArgs(expr[11 .. expr.len - 1]);
             if (a.len == 2) {
