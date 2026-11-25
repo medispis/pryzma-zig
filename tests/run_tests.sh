@@ -73,6 +73,17 @@ if command -v script >/dev/null 2>&1; then
         printf '%s\n' "$errors_output"
         ((failed+=1))
     fi
+    file_output="$(printf 'file\ntests/repl_file.pryzma\nn\nexit\n' | script -q -c "$bin" /dev/null 2>&1)"
+    if grep -Fq 'Enter the file path of the program:' <<<"$file_output" &&
+       grep -Fq 'file command loaded' <<<"$file_output" &&
+       grep -Fq 'Clear variables, functions and structs dictionaries? (y/n):' <<<"$file_output"; then
+        printf '[OK] REPL file command\n'
+        ((passed+=1))
+    else
+        printf '[FAIL] REPL file command\n'
+        printf '%s\n' "$file_output"
+        ((failed+=1))
+    fi
 fi
 printf '%d passed, %d failed\n' "$passed" "$failed"
 ((failed == 0))

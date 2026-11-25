@@ -181,6 +181,20 @@ fn runRepl(interpreter: *interp_mod.Interpreter, allocator: std.mem.Allocator) !
             }
             continue;
         }
+        if (std.mem.eql(u8, code, "file")) {
+            try std.Io.File.stdout().writeStreamingAll(io, "Enter the file path of the program: ");
+            const path_line = (try reader.interface.takeDelimiter('\n')) orelse break;
+            const path = std.mem.trim(u8, path_line, " \t\r\"");
+            try interpreter.interpretFile(path, &.{});
+            try std.Io.File.stdout().writeStreamingAll(io, "Clear variables, functions and structs dictionaries? (y/n): ");
+            const clear_line = (try reader.interface.takeDelimiter('\n')) orelse break;
+            if (std.ascii.eqlIgnoreCase(std.mem.trim(u8, clear_line, " \t\r"), "y")) {
+                interpreter.variables.clearRetainingCapacity();
+                interpreter.functions.clearRetainingCapacity();
+                interpreter.structs.clearRetainingCapacity();
+            }
+            continue;
+        }
         if (std.mem.eql(u8, code, "help")) {
             try std.Io.File.stdout().writeStreamingAll(io,
                 \\Commands: file, cls, clear, debug, history, info, ppm, errors, exit, reboot, v, f, s, l, help, license
