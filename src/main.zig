@@ -120,6 +120,7 @@ fn runStdin(interpreter: *interp_mod.Interpreter, allocator: std.mem.Allocator) 
 
 fn runRepl(interpreter: *interp_mod.Interpreter, allocator: std.mem.Allocator) !void {
     const io = interpreter.io;
+    var history: std.ArrayList([]const u8) = .empty;
     try std.Io.File.stdout().writeStreamingAll(io,
         \\Pryzma 6.2
         \\To show the license type "license" or "help" to get help.
@@ -132,6 +133,38 @@ fn runRepl(interpreter: *interp_mod.Interpreter, allocator: std.mem.Allocator) !
         const line = (try reader.interface.takeDelimiter('\n')) orelse break;
         const code = std.mem.trim(u8, line, " \t\r");
         if (std.mem.eql(u8, code, "exit")) break;
+        if (code.len != 0) try history.append(allocator, try allocator.dupe(u8, code));
+        if (std.mem.startsWith(u8, code, "history")) {
+            const rest = std.mem.trim(u8, code["history".len..], " \t");
+            if (rest.len == 0) {
+                var output: std.Io.Writer.Allocating = .init(allocator);
+                for (history.items, 0..) |entry, index| try output.writer.print("{d}. {s}\n", .{ index + 1, entry });
+                try std.Io.File.stdout().writeStreamingAll(io, output.written());
+            } else if (std.mem.eql(u8, rest, "clear")) {
+                history.clearRetainingCapacity();
+            } else if (std.fmt.parseUnsigned(usize, rest, 10)) |number| {
+                if (number == 0 or number > history.items.len) {
+                    try std.Io.File.stdout().writeStreamingAll(io, "Invalid history index.\n");
+                } else {
+                    const selected = history.items[number - 1];
+                    const statements = try interpreter.preprocess(selected);
+                    for (statements) |statement| try interpreter.interpret(statement);
+                }
+            } else |_| {
+                var output: std.Io.Writer.Allocating = .init(allocator);
+                try output.writer.print("Searching for '{s}' in history:\n", .{rest});
+                var found: usize = 0;
+                for (history.items) |entry| {
+                    if (std.mem.indexOf(u8, entry, rest)) |_| {
+                        found += 1;
+                        try output.writer.print("{d}. {s}\n", .{ found, entry });
+                    }
+                }
+                if (found == 0) try output.writer.writeAll("No commands found matching the search term.\n");
+                try std.Io.File.stdout().writeStreamingAll(io, output.written());
+            }
+            continue;
+        }
         if (std.mem.startsWith(u8, code, "ppm")) {
             const command = std.mem.trim(u8, code[3..], " \t");
             if (command.len != 0) {
@@ -150,7 +183,7 @@ fn runRepl(interpreter: *interp_mod.Interpreter, allocator: std.mem.Allocator) !
         }
         if (std.mem.eql(u8, code, "help")) {
             try std.Io.File.stdout().writeStreamingAll(io,
-                \\Commands: help, license, history, info, errors, cls, clear, exit
+                \\Commands: file, cls, clear, debug, history, info, ppm, errors, exit, reboot, v, f, s, l, help, license
                 \\Enter Pryzma statements to execute them.
                 \\
             );

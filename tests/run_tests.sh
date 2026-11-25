@@ -38,5 +38,20 @@ else
     ((failed+=1))
 fi
 rm -f "$actual"
+if command -v script >/dev/null 2>&1; then
+    repl_output="$(printf 'print "alpha"\nhistory\nhistory print\nhistory 1\nhistory clear\nhistory\nexit\n' | script -q -c "$bin" /dev/null 2>&1)"
+    if grep -Fq '1. print "alpha"' <<<"$repl_output" &&
+       grep -Fq "Searching for 'print' in history:" <<<"$repl_output" &&
+       grep -Fq '2. history print' <<<"$repl_output" &&
+       grep -Fq '1. history' <<<"$repl_output" &&
+       grep -Fq 'alpha' <<<"$repl_output"; then
+        printf '[OK] REPL history list, search, replay, and clear\n'
+        ((passed+=1))
+    else
+        printf '[FAIL] REPL history list, search, replay, and clear\n'
+        printf '%s\n' "$repl_output"
+        ((failed+=1))
+    fi
+fi
 printf '%d passed, %d failed\n' "$passed" "$failed"
 ((failed == 0))
