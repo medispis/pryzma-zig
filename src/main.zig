@@ -195,6 +195,17 @@ fn runRepl(interpreter: *interp_mod.Interpreter, allocator: std.mem.Allocator) !
             }
             continue;
         }
+        if (std.mem.eql(u8, code, "debug")) {
+            try std.Io.File.stdout().writeStreamingAll(io, "Path to the file to debug ('exit' to quit debug mode): ");
+            const path_line = (try reader.interface.takeDelimiter('\n')) orelse break;
+            const path = std.mem.trim(u8, path_line, " \t\r\"");
+            if (!std.mem.eql(u8, path, "exit")) {
+                interpreter.debug = true;
+                try interpreter.interpretFile(path, &.{});
+                interpreter.debug = false;
+            }
+            continue;
+        }
         if (std.mem.eql(u8, code, "help")) {
             try std.Io.File.stdout().writeStreamingAll(io,
                 \\Commands: file, cls, clear, debug, history, info, ppm, errors, exit, reboot, v, f, s, l, help, license

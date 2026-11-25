@@ -84,6 +84,17 @@ if command -v script >/dev/null 2>&1; then
         printf '%s\n' "$file_output"
         ((failed+=1))
     fi
+    debug_output="$(printf 'debug\ntests/repl_debug.pryzma\nc\nexit\n' | script -q -c "$bin" /dev/null 2>&1)"
+    if grep -Fq "Path to the file to debug ('exit' to quit debug mode):" <<<"$debug_output" &&
+       grep -Fq 'Debug: Executing line' <<<"$debug_output" &&
+       grep -Fq 'debug command loaded' <<<"$debug_output"; then
+        printf '[OK] REPL debug command\n'
+        ((passed+=1))
+    else
+        printf '[FAIL] REPL debug command\n'
+        printf '%s\n' "$debug_output"
+        ((failed+=1))
+    fi
 fi
 printf '%d passed, %d failed\n' "$passed" "$failed"
 ((failed == 0))
