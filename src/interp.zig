@@ -68,6 +68,7 @@ pub const Interpreter = struct {
     memory_slots: std.StringHashMap(usize),
     asm_slots: std.StringHashMap(usize),
     asm_slot_names: std.ArrayList([]const u8) = .empty,
+    breakpoints: std.ArrayList(usize) = .empty,
 
     lines_map: std.ArrayList(LineMap) = .empty,
     lines_map_done: bool = false,
@@ -384,6 +385,7 @@ pub const Interpreter = struct {
             }
             line = std.mem.trim(u8, line, " \t\r\n");
             if (line.len == 0 or std.mem.startsWith(u8, line, "//")) continue;
+            if (self.debug) try self.debugPrompt(line);
 
             var deleted = false;
             for (self.deleted_keywords.items) |kw| {
@@ -2075,6 +2077,79 @@ pub const Interpreter = struct {
         const line = self.stdin_reader.?.interface.takeDelimiter('\n') catch return "";
         if (line) |l| return try self.dup(l);
         return "";
+    }
+
+    fn debugPrompt(self: *Interpreter, line: []const u8) !void {
+        var matched = self.breakpoints.items.len == 0;
+        for (self.breakpoints.items) |bp| if (bp == self.current_line) {
+            matched = true;
+            break;
+        };
+        if (!matched) return;
+        self.printFmt("Debug: Executing line {d}: {s}\n", .{ self.current_line, line });
+        while (self.debug) {
+            self.out("debug> ");
+            const raw = try self.inputLine("");
+            const cmd = std.mem.trim(u8, raw, " \t\r\n");
+            if (std.mem.eql(u8, cmd, "s") or std.mem.eql(u8, cmd, "")) return;
+            if (std.mem.eql(u8, cmd, "c")) {
+                self.debug = false;
+                return;
+            }
+            if (std.mem.eql(u8, cmd, "exit")) {
+                self.debug = false;
+                return;
+            }
+            if (std.mem.eql(u8, cmd, "help")) {
+                self.out("Commands: s (step), c (continue), b N (breakpoint), r N (remove), v, f, l, exit\n");
+                continue;
+            }
+            if (std.mem.eql(u8, cmd, "l")) {
+                self.printFmt("line {d}: {s}\n", .{ self.current_line, line });
+                continue;
+            }
+            if (std.mem.eql(u8, cmd, "v")) {
+                var vars = self.variables.iterator();
+                while (vars.next()) |entry| {
+                    const rendered = try value.repr(self.allocator, entry.value_ptr.*);
+                    self.printFmt("{s} = {s}\n", .{ entry.key_ptr.*, rendered });
+                }
+                continue;
+            }
+            if (std.mem.eql(u8, cmd, "f")) {
+                var funcs = self.functions.iterator();
+                while (funcs.next()) |entry| self.printFmt("{s}\n", .{entry.key_ptr.*});
+                continue;
+            }
+            if (std.mem.startsWith(u8, cmd, "b ")) {
+                const n = std.fmt.parseInt(usize, std.mem.trim(u8, cmd[2..], " \t"), 10) catch continue;
+                try self.breakpoints.append(self.allocator, n);
+                continue;
+            }
+            if (std.mem.startsWith(u8, cmd, "r ")) {
+                const n = std.fmt.parseInt(usize, std.mem.trim(u8, cmd[2..], " \t"), 10) catch continue;
+                for (self.breakpoints.items, 0..) |bp, i| if (bp == n) {
+                    _ = self.breakpoints.orderedRemove(i);
+                    break;
+                };
+            }
+        }
+    }
+
+    pub fn ppmCommand(self: *Interpreter, command_line: []const u8) !void {
+        const python = self.python orelse return;
+        const executable: Value = self.variables.get("interpreter_path") orelse .{ .string = "pryzma" };
+        const exe_path = if (executable == .string) executable.string else "pryzma";
+        const root = std.fs.path.dirname(exe_path) orelse ".";
+        const args = try List.create(self.allocator);
+        var tokens = std.mem.tokenizeAny(u8, command_line, " \t\r\n");
+        while (tokens.next()) |token| try args.append(.{ .string = try self.dup(token) });
+        const py_root = try python.newString(root);
+        const py_args = try python.toPy(.{ .list = args }, false);
+        const result = try python.callHelper("ppm_command", &.{ py_root, py_args });
+        py_mod.Py_DecRef(result);
+        py_mod.Py_DecRef(py_root);
+        py_mod.Py_DecRef(py_args);
     }
 };
 

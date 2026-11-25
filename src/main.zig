@@ -11,6 +11,9 @@ pub fn main(init: std.process.Init.Minimal) !void {
     _ = try interpreter.setVar("__python__", .{ .py_object = @ptrCast(p.helper) });
 
     const args = init.args.vector;
+    if (args.len > 0) {
+        _ = try interpreter.setVar("interpreter_path", .{ .string = std.mem.span(args[0]) });
+    }
     if (args.len <= 1) {
         if (isatty(0) != 0) {
             try runRepl(interpreter, allocator);
@@ -29,6 +32,7 @@ pub fn main(init: std.process.Init.Minimal) !void {
     for (args[2..]) |arg_ptr| {
         const arg = std.mem.span(arg_ptr);
         if (std.mem.eql(u8, arg, "-h")) help = true;
+        if (std.mem.eql(u8, arg, "-d")) interpreter.debug = true;
         if (std.mem.eql(u8, arg, "-p")) interpreter.preprocess_only = true;
         if (std.mem.eql(u8, arg, "-np")) interpreter.no_preproc = true;
         if (std.mem.eql(u8, arg, "-fd")) interpreter.forward_declare = true;
@@ -122,6 +126,22 @@ fn runRepl(interpreter: *interp_mod.Interpreter, allocator: std.mem.Allocator) !
         const line = (try reader.interface.takeDelimiter('\n')) orelse break;
         const code = std.mem.trim(u8, line, " \t\r");
         if (std.mem.eql(u8, code, "exit")) break;
+        if (std.mem.startsWith(u8, code, "ppm")) {
+            const command = std.mem.trim(u8, code[3..], " \t");
+            if (command.len != 0) {
+                try interpreter.ppmCommand(command);
+            } else {
+                try std.Io.File.stdout().writeStreamingAll(io, "ppm shell. Type 'exit' to quit.\n");
+                while (true) {
+                    try std.Io.File.stdout().writeStreamingAll(io, "> ");
+                    const ppm_line = (try reader.interface.takeDelimiter('\n')) orelse break;
+                    const ppm_command = std.mem.trim(u8, ppm_line, " \t\r");
+                    if (std.mem.eql(u8, ppm_command, "exit")) break;
+                    try interpreter.ppmCommand(ppm_command);
+                }
+            }
+            continue;
+        }
         if (std.mem.eql(u8, code, "help")) {
             try std.Io.File.stdout().writeStreamingAll(io,
                 \\Commands: help, license, history, info, errors, cls, clear, exit

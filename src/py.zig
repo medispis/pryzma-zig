@@ -355,6 +355,90 @@ pub const Py = struct {
         \\    sys.stdout.write(s)
         \\    sys.stdout.flush()
         \\
+        \\def ppm_command(root, args):
+        \\    packages = os.path.join(root, 'packages')
+        \\    os.makedirs(packages, exist_ok=True)
+        \\    api = 'http://pryzma.dzordz.pl/download'
+        \\    def install(name, url=api):
+        \\        target = os.path.join(packages, name)
+        \\        try:
+        \\            response = __import__('requests').get(url + '/' + name)
+        \\            if response.status_code != 200:
+        \\                print('Package', name, 'not found in the repository.')
+        \\                return
+        \\            os.makedirs(target, exist_ok=True)
+        \\            archive = os.path.join(target, name + '.zip')
+        \\            with open(archive, 'wb') as f: f.write(response.content)
+        \\            import zipfile
+        \\            with zipfile.ZipFile(archive) as z: z.extractall(target)
+        \\            os.remove(archive)
+        \\            print('Package', name, 'downloaded and installed successfully.')
+        \\        except Exception as e:
+        \\            print('Primary source failed:', url + '/' + name)
+        \\            print('Trying fallback source (GitHub)...')
+        \\            import subprocess
+        \\            temp = os.path.join('/tmp', 'ppm_temp_' + name)
+        \\            try:
+        \\                subprocess.run(['git', 'clone', '--depth=1', 'https://github.com/IgorCielniak/Pryzma-packages', temp], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        \\                source = os.path.join(temp, name)
+        \\                if not os.path.isdir(source): raise FileNotFoundError("Package '" + name + "' not found in GitHub repo.")
+        \\                if os.path.exists(target): shutil.rmtree(target)
+        \\                shutil.copytree(source, target)
+        \\                print(name + ' installed successfully from GitHub.')
+        \\            except Exception as err:
+        \\                print('Fallback source failed:', err)
+        \\                print('Package installation failed from both sources.')
+        \\            finally:
+        \\                if os.path.exists(temp): shutil.rmtree(temp)
+        \\    if not args: return
+        \\    cmd = args[0]
+        \\    if cmd == 'help':
+        \\        print('Commands: remove, list [avaliable], from URL PACKAGE..., install PACKAGE..., update [PACKAGE...], show [PACKAGE...], help, exit')
+        \\    elif cmd == 'remove':
+        \\        if len(args) < 2: print('Please provide a package name.')
+        \\        else:
+        \\            path = os.path.join(packages, args[1])
+        \\            if os.path.exists(path): shutil.rmtree(path); print('Package', args[1], 'removed successfully.')
+        \\            else: print('Package', args[1], 'not found.')
+        \\    elif cmd == 'list':
+        \\        if len(args) > 1 and args[1] == 'avaliable':
+        \\            url = args[2] if len(args) > 2 else 'http://pryzma.dzordz.pl/api/fetch'
+        \\            try:
+        \\                response = __import__('requests').get(url)
+        \\                names = response.json() if response.status_code == 200 else []
+        \\                if names:
+        \\                    print('Available packages:')
+        \\                    for name in names: print('-', name)
+        \\                else: print('No packages available on the server.')
+        \\            except Exception as e: print('Error fetching packages:', e)
+        \\        else:
+        \\            names = os.listdir(packages)
+        \\            if names:
+        \\                print('Available packages:')
+        \\                for name in names: print('-', name)
+        \\            else: print('No packages installed.')
+        \\    elif cmd in ('install', 'from'):
+        \\        if cmd == 'from' and len(args) >= 3:
+        \\            for name in args[2:]: install(name, args[1])
+        \\        elif cmd == 'install' and len(args) >= 2:
+        \\            for name in args[1:]: install(name)
+        \\        else: print('Please provide a package name.')
+        \\    elif cmd == 'update':
+        \\        names = args[1:] or os.listdir(packages)
+        \\        for name in names: install(name)
+        \\    elif cmd == 'show':
+        \\        names = args[1:] or os.listdir(packages)
+        \\        if not names: print('No packages installed.')
+        \\        for name in names:
+        \\            path = os.path.join(packages, name, 'metadata.json')
+        \\            if not os.path.isfile(path): print('Package metadata not found.'); continue
+        \\            with open(path) as f: meta = json.load(f)
+        \\            print(name, meta.get('version', 'Version not specified.'))
+        \\            print('Author:', meta.get('author', 'Author not specified.'))
+        \\            print('Description:', meta.get('description', 'Description not specified.'))
+        \\            print('License:', meta.get('license', 'License not specified.'), '\\n')
+        \\    else: print("Unknown command. Type 'help' for available commands.")
+        \\
     ;
 
     pub fn init(allocator: Allocator) !*Py {
