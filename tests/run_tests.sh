@@ -76,6 +76,18 @@ else
     printf '%s\n' "$rmdir_output"
     ((failed+=1))
 fi
+removedirs_target="$mkdir_tmp/remove-tree/a/b"
+removedirs_source="$mkdir_tmp/removedirs.pryzma"
+printf 'makedirs("%s")\nremovedirs("%s")\n' "$removedirs_target" "$removedirs_target" >"$removedirs_source"
+removedirs_output="$("$bin" "$removedirs_source" 2>&1)"
+if [[ ! -e "$mkdir_tmp/remove-tree" && -d "$mkdir_tmp" && -z "$removedirs_output" ]]; then
+    printf '[OK] removedirs statement\n'
+    ((passed+=1))
+else
+    printf '[FAIL] removedirs statement\n'
+    printf '%s\n' "$removedirs_output"
+    ((failed+=1))
+fi
 rm -rf "$mkdir_tmp"
 if command -v script >/dev/null 2>&1; then
     repl_output="$(printf 'print "alpha"\nhistory\nhistory print\nhistory 1\nhistory clear\nhistory\nexit\n' | script -q -c "$bin" /dev/null 2>&1)"

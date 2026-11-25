@@ -601,6 +601,9 @@ pub const Interpreter = struct {
                     self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: {s}", .{ self.current_line, @errorName(err) }));
                 };
             }
+        } else if (std.mem.startsWith(u8, line, "removedirs(") and line[line.len - 1] == ')') {
+            const path = try self.evalExpr(line[11 .. line.len - 1]);
+            if (path == .string) try self.removeDirs(path.string);
         } else if (std.mem.startsWith(u8, line, "remove_path(") and line[line.len - 1] == ')') {
             const path = try self.evalExpr(line[12 .. line.len - 1]);
             if (path == .string) std.Io.Dir.cwd().deleteFile(self.io, path.string) catch {};
@@ -1246,6 +1249,19 @@ pub const Interpreter = struct {
         if (error_text == .string) {
             const rendered_path = try value.printString(self.allocator, path);
             self.runtimeError(15, try std.fmt.allocPrint(self.allocator, "Error at line {d} while writing to file '{s}': {s}", .{ self.current_line, rendered_path, error_text.string }));
+        }
+    }
+
+    fn removeDirs(self: *Interpreter, path: []const u8) !void {
+        var current = path;
+        var first = true;
+        while (current.len != 0) {
+            std.Io.Dir.cwd().deleteDir(self.io, current) catch |err| {
+                if (first) self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: {s}", .{ self.current_line, @errorName(err) }));
+                break;
+            };
+            first = false;
+            current = std.fs.path.dirname(current) orelse break;
         }
     }
 
