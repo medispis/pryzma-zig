@@ -2285,7 +2285,28 @@ pub const Interpreter = struct {
                 return;
             }
             if (std.mem.eql(u8, cmd, "help")) {
-                self.out("Commands: s (step), c (continue), b N (breakpoint), r N (remove), v, f, st, l, exit\n");
+                self.out(
+                    \\Available commands:
+                    \\s: Step to the next line
+                    \\c: Continue to the next breakpoint
+                    \\b <line>: Add a breakpoint at the specified line number
+                    \\r <line>: Remove a breakpoint at the specified line number
+                    \\l: List all current breakpoints
+                    \\v: View all variables
+                    \\f: View all functions
+                    \\st: View all structs
+                    \\! <pryzma code>: Run Pryzma code
+                    \\!! <python code>: Run Python code
+                    \\log: Set the log file name (default is log.txt)
+                    \\clear: Clear the screen
+                    \\exit: Exit the debugger
+                    \\help: Show this help message
+                    \\
+                );
+                continue;
+            }
+            if (std.mem.eql(u8, cmd, "clear")) {
+                self.out("\x1b[2J\x1b[H");
                 continue;
             }
             if (std.mem.eql(u8, cmd, "l")) {

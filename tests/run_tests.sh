@@ -161,14 +161,19 @@ if command -v script >/dev/null 2>&1; then
         ((failed+=1))
     fi
     debug_log="$(mktemp)"
-    printf 'debug\ntests/repl_debug.pryzma\nlog\n%s\ns\nexit\n' "$debug_log" |
+    printf 'debug\ntests/repl_debug.pryzma\nhelp\nclear\nlog\n%s\ns\nexit\n' "$debug_log" |
         script -q -c "$bin" /dev/null >/dev/null 2>&1
-    if grep -Fq "Log file set to: $debug_log" "$debug_log" &&
+    debug_help_output="$(printf 'debug\ntests/repl_debug.pryzma\nhelp\nclear\nc\nexit\n' | script -q -c "$bin" /dev/null 2>&1)"
+    if grep -Fq '!! <python code>: Run Python code' <<<"$debug_help_output" &&
+       grep -Fq 'clear: Clear the screen' <<<"$debug_help_output" &&
+       grep -q $'\033\[2J' <<<"$debug_help_output" &&
+       grep -Fq "Log file set to: $debug_log" "$debug_log" &&
        grep -Fq 'User chose to step.' "$debug_log"; then
-        printf '[OK] debugger logging\n'
+        printf '[OK] debugger help, clear, and logging\n'
         ((passed+=1))
     else
-        printf '[FAIL] debugger logging\n'
+        printf '[FAIL] debugger help, clear, and logging\n'
+        printf '%s\n' "$debug_help_output"
         cat "$debug_log"
         ((failed+=1))
     fi
