@@ -1,0 +1,18 @@
+.{
+    .name = .pryzma,
+    .version = "0.1.0",
+    .fingerprint = 0x9c4559792f3e4599,
+    .minimum_zig_version = "0.17.1",
+    .dependencies = .{},
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "tests",
+        "pryzma.pryzma",
+        "doc.txt",
+        "license.txt",
+        "README.md",
+        "PLAN.md",
+    },
+}

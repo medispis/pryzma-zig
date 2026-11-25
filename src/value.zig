@@ -1,24 +1,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
-pub const Value = union(enum) {
-    none,
-    boolean: bool,
-    int: i64,
-    float: f64,
-    string: []const u8,
-    list: *List,
-    dict: *Dict,
-    tuple: *List,
-    reference: Reference,
-    func_ref: []const u8,
-    extern_fn: *ExternFn,
-    py_object: *anyopaque,
-    lazy: *Lazy,
-    isolate: *anyopaque,
-    timestamp: i64,
-    duration: i64,
-};
+pub const PyObject = anyopaque;
 
 pub const Reference = struct {
     var_name: []const u8,
@@ -26,8 +9,9 @@ pub const Reference = struct {
 };
 
 pub const ExternFn = struct {
-    py_callable: *anyopaque,
+    callable: *PyObject,
     name: []const u8 = "",
+    is_c: bool = false,
 };
 
 pub const Lazy = struct {
@@ -43,43 +27,53 @@ pub const List = struct {
         return .{ .allocator = allocator };
     }
 
-    pub fn append(self: *List, value: Value) !void {
-        try self.items.append(self.allocator, value);
+    pub fn create(allocator: Allocator) !*List {
+        const l = try allocator.create(List);
+        l.* = init(allocator);
+        return l;
     }
 
-    pub fn count(self: *const List) usize {
+    pub fn append(self: *List, v: Value) !void {
+        try self.items.append(self.allocator, v);
+    }
+
+    pub fn appendSlice(self: *List, vs: []const Value) !void {
+        try self.items.appendSlice(self.allocator, vs);
+    }
+
+    pub fn len(self: *const List) usize {
         return self.items.items.len;
     }
 
-    pub fn at(self: *const List, index: i64) ?Value {
+    pub fn get(self: *const List, index: i64) ?Value {
         const n: i64 = @intCast(self.items.items.len);
-        const idx = if (index < 0) index + n else index;
-        if (idx < 0 or idx >= n) return null;
-        return self.items.items[@intCast(idx)];
+        const i = if (index < 0) index + n else index;
+        if (i < 0 or i >= n) return null;
+        return self.items.items[@intCast(i)];
     }
 
-    pub fn set(self: *List, index: i64, value: Value) bool {
+    pub fn set(self: *List, index: i64, v: Value) bool {
         const n: i64 = @intCast(self.items.items.len);
-        const idx = if (index < 0) index + n else index;
-        if (idx < 0 or idx >= n) return false;
-        self.items.items[@intCast(idx)] = value;
+        const i = if (index < 0) index + n else index;
+        if (i < 0 or i >= n) return false;
+        self.items.items[@intCast(i)] = v;
         return true;
     }
 
-    pub fn pop(self: *List, index: i64) ?Value {
+    pub fn popAt(self: *List, index: i64) ?Value {
         const n: i64 = @intCast(self.items.items.len);
-        const idx = if (index < 0) index + n else index;
-        if (idx < 0 or idx >= n) return null;
-        return self.items.orderedRemove(@intCast(idx));
+        const i = if (index < 0) index + n else index;
+        if (i < 0 or i >= n) return null;
+        return self.items.orderedRemove(@intCast(i));
     }
 
-    pub fn popLast(self: *List) ?Value {
+    pub fn pop(self: *List) ?Value {
         return self.items.pop();
     }
 
-    pub fn removeValue(self: *List, value: Value) bool {
+    pub fn removeValue(self: *List, v: Value) bool {
         for (self.items.items, 0..) |item, i| {
-            if (eql(item, value)) {
+            if (eql(item, v)) {
                 _ = self.items.orderedRemove(i);
                 return true;
             }
@@ -87,8 +81,15 @@ pub const List = struct {
         return false;
     }
 
-    pub fn insert(self: *List, index: usize, value: Value) !void {
-        try self.items.insert(self.allocator, index, value);
+    pub fn indexOf(self: *const List, v: Value) ?usize {
+        for (self.items.items, 0..) |item, i| {
+            if (eql(item, v)) return i;
+        }
+        return null;
+    }
+
+    pub fn insertAt(self: *List, index: usize, v: Value) !void {
+        try self.items.insert(self.allocator, index, v);
     }
 };
 
@@ -102,11 +103,17 @@ pub const Dict = struct {
         return .{ .allocator = allocator };
     }
 
-    pub fn count(self: *const Dict) usize {
+    pub fn create(allocator: Allocator) !*Dict {
+        const d = try allocator.create(Dict);
+        d.* = init(allocator);
+        return d;
+    }
+
+    pub fn len(self: *const Dict) usize {
         return self.keys.items.len;
     }
 
-    pub fn getIndex(self: *const Dict, key: Value) ?usize {
+    pub fn indexOf(self: *const Dict, key: Value) ?usize {
         for (self.keys.items, 0..) |k, i| {
             if (eql(k, key)) return i;
         }
@@ -114,29 +121,29 @@ pub const Dict = struct {
     }
 
     pub fn get(self: *const Dict, key: Value) ?Value {
-        if (self.getIndex(key)) |i| return self.values.items[i];
+        if (self.indexOf(key)) |i| return self.values.items[i];
         return null;
-    }
-
-    pub fn put(self: *Dict, key: Value, value: Value) !void {
-        if (self.getIndex(key)) |i| {
-            self.values.items[i] = value;
-            return;
-        }
-        try self.keys.append(self.allocator, key);
-        try self.values.append(self.allocator, value);
-    }
-
-    pub fn putStr(self: *Dict, key: []const u8, value: Value) !void {
-        try self.put(.{ .string = key }, value);
     }
 
     pub fn getStr(self: *const Dict, key: []const u8) ?Value {
         return self.get(.{ .string = key });
     }
 
+    pub fn put(self: *Dict, key: Value, v: Value) !void {
+        if (self.indexOf(key)) |i| {
+            self.values.items[i] = v;
+            return;
+        }
+        try self.keys.append(self.allocator, key);
+        try self.values.append(self.allocator, v);
+    }
+
+    pub fn putStr(self: *Dict, key: []const u8, v: Value) !void {
+        try self.put(.{ .string = key }, v);
+    }
+
     pub fn remove(self: *Dict, key: Value) ?Value {
-        if (self.getIndex(key)) |i| {
+        if (self.indexOf(key)) |i| {
             _ = self.keys.orderedRemove(i);
             return self.values.orderedRemove(i);
         }
@@ -144,8 +151,7 @@ pub const Dict = struct {
     }
 
     pub fn copy(self: *const Dict) !*Dict {
-        const d = try self.allocator.create(Dict);
-        d.* = Dict.init(self.allocator);
+        const d = try create(self.allocator);
         d.type_name = self.type_name;
         try d.keys.appendSlice(self.allocator, self.keys.items);
         try d.values.appendSlice(self.allocator, self.values.items);
@@ -153,8 +159,25 @@ pub const Dict = struct {
     }
 };
 
-pub fn truthy(value: Value) bool {
-    return switch (value) {
+pub const Value = union(enum) {
+    none,
+    boolean: bool,
+    int: i64,
+    float: f64,
+    string: []const u8,
+    list: *List,
+    dict: *Dict,
+    tuple: *List,
+    reference: Reference,
+    func_ref: []const u8,
+    extern_fn: *ExternFn,
+    py_object: *PyObject,
+    lazy: *Lazy,
+    isolate: *anyopaque,
+};
+
+pub fn truthy(v: Value) bool {
+    return switch (v) {
         .none => false,
         .boolean => |b| b,
         .int => |i| i != 0,
@@ -163,44 +186,63 @@ pub fn truthy(value: Value) bool {
         .list => |l| l.items.items.len != 0,
         .dict => |d| d.keys.items.len != 0,
         .tuple => |t| t.items.items.len != 0,
-        .reference => true,
-        .func_ref => true,
-        .extern_fn => true,
-        .py_object => true,
-        .lazy => true,
-        .isolate => true,
-        .timestamp => true,
-        .duration => |d| d != 0,
+        else => true,
     };
 }
 
-pub fn typeName(value: Value) []const u8 {
-    return switch (value) {
+pub fn typeName(v: Value) []const u8 {
+    return switch (v) {
         .none => "NoneType",
         .boolean => "bool",
         .int => "int",
         .float => "float",
         .string => "str",
         .list => "list",
-        .dict => |d| if (d.type_name) |n| n else "dict",
+        .dict => |d| d.type_name orelse "dict",
         .tuple => "tuple",
         .reference => "Reference",
-        .func_ref => "function",
+        .func_ref => "FuncReference",
         .extern_fn => "function",
         .py_object => "object",
         .lazy => "function",
-        .isolate => "isolate",
-        .timestamp => "datetime",
-        .duration => "timedelta",
+        .isolate => "PryzmaInterpreter",
+    };
+}
+
+pub fn isNumber(v: Value) bool {
+    return switch (v) {
+        .int, .float, .boolean => true,
+        else => false,
+    };
+}
+
+pub fn asFloat(v: Value) ?f64 {
+    return switch (v) {
+        .int => |i| @floatFromInt(i),
+        .float => |f| f,
+        .boolean => |b| if (b) 1.0 else 0.0,
+        else => null,
+    };
+}
+
+pub fn asInt(v: Value) ?i64 {
+    return switch (v) {
+        .int => |i| i,
+        .boolean => |b| if (b) 1 else 0,
+        .float => |f| @intFromFloat(f),
+        .string => |s| std.fmt.parseInt(i64, s, 10) catch null,
+        else => null,
     };
 }
 
 pub fn eql(a: Value, b: Value) bool {
-    const tag_a = std.meta.activeTag(a);
-    const tag_b = std.meta.activeTag(b);
-    if (tag_a != tag_b) {
-        if ((tag_a == .int and tag_b == .float)) return @as(f64, @floatFromInt(a.int)) == b.float;
-        if ((tag_a == .float and tag_b == .int)) return a.float == @as(f64, @floatFromInt(b.int));
+    const ta = std.meta.activeTag(a);
+    const tb = std.meta.activeTag(b);
+    if (ta != tb) {
+        if (ta == .int and tb == .float) return @as(f64, @floatFromInt(a.int)) == b.float;
+        if (ta == .float and tb == .int) return a.float == @as(f64, @floatFromInt(b.int));
+        if (ta == .boolean and tb == .int) return @as(i64, if (a.boolean) 1 else 0) == b.int;
+        if (ta == .int and tb == .boolean) return a.int == @as(i64, if (b.boolean) 1 else 0);
         return false;
     }
     return switch (a) {
@@ -218,8 +260,6 @@ pub fn eql(a: Value, b: Value) bool {
         .py_object => a.py_object == b.py_object,
         .lazy => a.lazy == b.lazy,
         .isolate => a.isolate == b.isolate,
-        .timestamp => a.timestamp == b.timestamp,
-        .duration => a.duration == b.duration,
     };
 }
 
@@ -240,223 +280,155 @@ fn dictEql(a: *Dict, b: *Dict) bool {
     return true;
 }
 
-pub fn isNumber(value: Value) bool {
-    return switch (value) {
-        .int, .float, .boolean => true,
-        else => false,
-    };
+pub fn appendFloat(w: *std.Io.Writer, f: f64) !void {
+    if (std.math.isNan(f)) return w.writeAll("nan");
+    if (std.math.isInf(f)) return w.writeAll(if (f < 0) "-inf" else "inf");
+    if (f == @trunc(f) and @abs(f) < 1e16) {
+        try w.print("{d}.0", .{@as(i64, @intFromFloat(f))});
+        return;
+    }
+    try w.print("{d}", .{f});
 }
 
-pub fn asFloat(value: Value) ?f64 {
-    return switch (value) {
-        .int => |i| @floatFromInt(i),
-        .float => |f| f,
-        .boolean => |b| if (b) 1 else 0,
-        else => null,
-    };
-}
-
-pub fn asInt(value: Value) ?i64 {
-    return switch (value) {
-        .int => |i| i,
-        .boolean => |b| if (b) 1 else 0,
-        .float => |f| @intFromFloat(f),
-        .string => |s| std.fmt.parseInt(i64, s, 10) catch null,
-        else => null,
-    };
-}
-
-pub fn appendQuoted(out: *std.ArrayList(u8), allocator: Allocator, s: []const u8) !void {
-    try out.append(allocator, '\'');
+pub fn appendQuoted(w: *std.Io.Writer, s: []const u8) !void {
+    try w.writeByte('\'');
     for (s) |c| {
         switch (c) {
-            '\\' => try out.appendSlice(allocator, "\\\\"),
-            '\'' => try out.appendSlice(allocator, "\\'"),
-            '\n' => try out.appendSlice(allocator, "\\n"),
-            '\r' => try out.appendSlice(allocator, "\\r"),
-            '\t' => try out.appendSlice(allocator, "\\t"),
+            '\\' => try w.writeAll("\\\\"),
+            '\'' => try w.writeAll("\\'"),
+            '\n' => try w.writeAll("\\n"),
+            '\r' => try w.writeAll("\\r"),
+            '\t' => try w.writeAll("\\t"),
             else => {
                 if (c < 32 or c == 127) {
-                    try std.fmt.format(out.writer(allocator), "\\x{x:0>2}", .{c});
+                    try w.print("\\x{x:0>2}", .{c});
                 } else {
-                    try out.append(allocator, c);
+                    try w.writeByte(c);
                 }
             },
         }
     }
-    try out.append(allocator, '\'');
+    try w.writeByte('\'');
 }
 
-pub fn appendRepr(out: *std.ArrayList(u8), allocator: Allocator, value: Value) anyerror!void {
-    switch (value) {
-        .none => try out.appendSlice(allocator, "None"),
-        .boolean => |b| try out.appendSlice(allocator, if (b) "True" else "False"),
-        .int => |i| try std.fmt.format(out.writer(allocator), "{d}", .{i}),
-        .float => |f| try appendFloat(out, allocator, f),
-        .string => |s| try appendQuoted(out, allocator, s),
+pub fn appendRepr(w: *std.Io.Writer, v: Value) anyerror!void {
+    switch (v) {
+        .none => try w.writeAll("None"),
+        .boolean => |b| try w.writeAll(if (b) "True" else "False"),
+        .int => |i| try w.print("{d}", .{i}),
+        .float => |f| try appendFloat(w, f),
+        .string => |s| try appendQuoted(w, s),
         .list => |l| {
-            try out.append(allocator, '[');
+            try w.writeByte('[');
             for (l.items.items, 0..) |item, i| {
-                if (i != 0) try out.appendSlice(allocator, ", ");
-                try appendRepr(out, allocator, item);
+                if (i != 0) try w.writeAll(", ");
+                try appendRepr(w, item);
             }
-            try out.append(allocator, ']');
+            try w.writeByte(']');
         },
         .tuple => |t| {
-            try out.append(allocator, '(');
+            try w.writeByte('(');
             for (t.items.items, 0..) |item, i| {
-                if (i != 0) try out.appendSlice(allocator, ", ");
-                try appendRepr(out, allocator, item);
+                if (i != 0) try w.writeAll(", ");
+                try appendRepr(w, item);
             }
-            if (t.items.items.len == 1) try out.append(allocator, ',');
-            try out.append(allocator, ')');
+            if (t.items.items.len == 1) try w.writeByte(',');
+            try w.writeByte(')');
         },
         .dict => |d| {
-            try out.append(allocator, '{');
-            for (d.keys.items, d.values.items, 0..) |k, v, i| {
-                if (i != 0) try out.appendSlice(allocator, ", ");
-                try appendRepr(out, allocator, k);
-                try out.appendSlice(allocator, ": ");
-                try appendRepr(out, allocator, v);
+            try w.writeByte('{');
+            for (d.keys.items, d.values.items, 0..) |k, val, i| {
+                if (i != 0) try w.writeAll(", ");
+                try appendRepr(w, k);
+                try w.writeAll(": ");
+                try appendRepr(w, val);
             }
-            try out.append(allocator, '}');
+            try w.writeByte('}');
         },
-        .reference => |r| try std.fmt.format(out.writer(allocator), "<Reference {s}>", .{r.var_name}),
-        .func_ref => |n| try std.fmt.format(out.writer(allocator), "<function {s}>", .{n}),
-        .extern_fn => |e| try std.fmt.format(out.writer(allocator), "<extern {s}>", .{e.name}),
-        .py_object => try out.appendSlice(allocator, "<python object>"),
-        .lazy => try out.appendSlice(allocator, "<lazy>"),
-        .isolate => try out.appendSlice(allocator, "<isolate>"),
-        .timestamp => |t| try std.fmt.format(out.writer(allocator), "{d}", .{t}),
-        .duration => |d| try std.fmt.format(out.writer(allocator), "{d}", .{d}),
+        .reference => |r| try w.print("<Reference {s}>", .{r.var_name}),
+        .func_ref => |n| try w.print("<FuncReference {s}>", .{n}),
+        .extern_fn => |e| try w.print("<function {s}>", .{e.name}),
+        .py_object => try w.writeAll("<python object>"),
+        .lazy => try w.writeAll("<function>"),
+        .isolate => try w.writeAll("<PryzmaInterpreter>"),
     }
 }
 
-pub fn appendFloat(out: *std.ArrayList(u8), allocator: Allocator, f: f64) !void {
-    if (std.math.isNan(f)) {
-        try out.appendSlice(allocator, "nan");
-        return;
-    }
-    if (std.math.isInf(f)) {
-        try out.appendSlice(allocator, if (f < 0) "-inf" else "inf");
-        return;
-    }
-    if (f == @floor(f) and @abs(f) < 1e16) {
-        try std.fmt.format(out.writer(allocator), "{d}.0", .{@as(i64, @intFromFloat(f))});
-        return;
-    }
-    try std.fmt.format(out.writer(allocator), "{d}", .{f});
+pub fn repr(allocator: Allocator, v: Value) ![]u8 {
+    var aw: std.Io.Writer.Allocating = .init(allocator);
+    try appendRepr(&aw.writer, v);
+    return aw.toOwnedSlice();
 }
 
-pub fn repr(allocator: Allocator, value: Value) ![]u8 {
-    var out: std.ArrayList(u8) = .empty;
-    try appendRepr(&out, allocator, value);
-    return out.toOwnedSlice(allocator);
-}
-
-pub fn printString(allocator: Allocator, value: Value) ![]u8 {
-    return switch (value) {
+pub fn printString(allocator: Allocator, v: Value) ![]u8 {
+    return switch (v) {
         .string => |s| try allocator.dupe(u8, s),
-        else => try repr(allocator, value),
+        else => try repr(allocator, v),
     };
+}
+
+pub fn concat(allocator: Allocator, a: []const u8, b: []const u8) ![]const u8 {
+    const out = try allocator.alloc(u8, a.len + b.len);
+    @memcpy(out[0..a.len], a);
+    @memcpy(out[a.len..], b);
+    return out;
 }
 
 pub fn add(a: Value, b: Value) Value {
     if (a == .string or b == .string) {
-        // Custom Pryzma behavior: convert both to strings and concatenate.
         const aa = printString(std.heap.page_allocator, a) catch return .none;
-        defer std.heap.page_allocator.free(aa);
         const bb = printString(std.heap.page_allocator, b) catch return .none;
-        defer std.heap.page_allocator.free(bb);
-        const out = std.heap.page_allocator.alloc(u8, aa.len + bb.len) catch return .none;
-        @memcpy(out[0..aa.len], aa);
-        @memcpy(out[aa.len..], bb);
-        return .{ .string = out };
+        return .{ .string = concat(std.heap.page_allocator, aa, bb) catch return .none };
     }
     if (a == .list and b == .list) {
-        const l = std.heap.page_allocator.create(List) catch return .none;
-        l.* = List.init(std.heap.page_allocator);
-        l.items.appendSlice(std.heap.page_allocator, a.list.items.items) catch return .none;
-        l.items.appendSlice(std.heap.page_allocator, b.list.items.items) catch return .none;
+        const l = List.create(std.heap.page_allocator) catch return .none;
+        l.appendSlice(a.list.items.items) catch return .none;
+        l.appendSlice(b.list.items.items) catch return .none;
         return .{ .list = l };
     }
-    if (a == .tuple and b == .tuple) {
-        const l = std.heap.page_allocator.create(List) catch return .none;
-        l.* = List.init(std.heap.page_allocator);
-        l.items.appendSlice(std.heap.page_allocator, a.tuple.items.items) catch return .none;
-        l.items.appendSlice(std.heap.page_allocator, b.tuple.items.items) catch return .none;
-        return .{ .tuple = l };
-    }
     if (a == .int and b == .int) return .{ .int = a.int +% b.int };
-    if (isNumber(a) and isNumber(b)) return .{ .float = (asFloat(a) orelse 0) + (asFloat(b) orelse 0) };
+    if (isNumber(a) and isNumber(b)) return .{ .float = asFloat(a).? + asFloat(b).? };
     return .none;
 }
 
 pub fn sub(a: Value, b: Value) Value {
     if (a == .int and b == .int) return .{ .int = a.int -% b.int };
-    if (isNumber(a) and isNumber(b)) return .{ .float = (asFloat(a) orelse 0) - (asFloat(b) orelse 0) };
+    if (isNumber(a) and isNumber(b)) return .{ .float = asFloat(a).? - asFloat(b).? };
     return .none;
 }
 
 pub fn mul(a: Value, b: Value) Value {
     if (a == .int and b == .int) return .{ .int = a.int *% b.int };
-    if (isNumber(a) and isNumber(b)) return .{ .float = (asFloat(a) orelse 0) * (asFloat(b) orelse 0) };
-    if (a == .string and b == .int) {
-        const n: usize = if (b.int > 0) @intCast(b.int) else 0;
+    if (isNumber(a) and isNumber(b)) return .{ .float = asFloat(a).? * asFloat(b).? };
+    if (a == .string and b == .int and b.int >= 0) {
+        const n: usize = @intCast(b.int);
         const out = std.heap.page_allocator.alloc(u8, a.string.len * n) catch return .none;
-        var i: usize = 0;
-        while (i < n) : (i += 1) @memcpy(out[i * a.string.len ..][0..a.string.len], a.string);
+        for (0..n) |i| @memcpy(out[i * a.string.len ..][0..a.string.len], a.string);
         return .{ .string = out };
     }
-    if (a == .int and b == .string) return mul(b, a);
-    if (a == .list and b == .int) {
-        const n: usize = if (b.int > 0) @intCast(b.int) else 0;
-        const l = std.heap.page_allocator.create(List) catch return .none;
-        l.* = List.init(std.heap.page_allocator);
-        var i: usize = 0;
-        while (i < n) : (i += 1) {
-            l.items.appendSlice(std.heap.page_allocator, a.list.items.items) catch return .none;
-        }
+    if (a == .list and b == .int and b.int >= 0) {
+        const l = List.create(std.heap.page_allocator) catch return .none;
+        for (0..@intCast(b.int)) |_| l.appendSlice(a.list.items.items) catch return .none;
         return .{ .list = l };
     }
-    if (a == .int and b == .list) return mul(b, a);
     return .none;
 }
 
 pub fn div(a: Value, b: Value) Value {
-    const bf = asFloat(b) orelse return .none;
-    if (bf == 0) return .none;
-    return .{ .float = (asFloat(a) orelse 0) / bf };
+    const divisor = asFloat(b) orelse return .none;
+    if (divisor == 0) return .none;
+    return .{ .float = asFloat(a).? / divisor };
 }
 
 pub fn mod(a: Value, b: Value) Value {
     if (a == .int and b == .int and b.int != 0) return .{ .int = @mod(a.int, b.int) };
-    const bf = asFloat(b) orelse return .none;
-    if (bf == 0) return .none;
-    return .{ .float = @mod(asFloat(a) orelse 0, bf) };
-}
-
-pub fn pow(a: Value, b: Value) Value {
-    if (a == .int and b == .int and b.int >= 0) {
-        var result: i64 = 1;
-        var i: i64 = 0;
-        while (i < b.int) : (i += 1) result *%= a.int;
-        return .{ .int = result };
-    }
-    return .{ .float = std.math.pow(f64, asFloat(a) orelse 0, asFloat(b) orelse 0) };
+    const divisor = asFloat(b) orelse return .none;
+    if (divisor == 0) return .none;
+    return .{ .float = @mod(asFloat(a).?, divisor) };
 }
 
 pub fn cmp(a: Value, b: Value) ?std.math.Order {
-    if (a == .int and b == .int) return std.math.order(a.int, b.int);
     if (isNumber(a) and isNumber(b)) return std.math.order(asFloat(a).?, asFloat(b).?);
     if (a == .string and b == .string) return std.mem.order(u8, a.string, b.string);
     return null;
-}
-
-pub fn intFromValue(value: Value) i64 {
-    return asInt(value) orelse 0;
-}
-
-pub fn floatFromValue(value: Value) f64 {
-    return asFloat(value) orelse 0;
 }
