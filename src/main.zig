@@ -282,6 +282,12 @@ fn runRepl(interpreter: *interp_mod.Interpreter, allocator: std.mem.Allocator) !
             try std.Io.File.stdout().writeStreamingAll(io, "\x1b[2J\x1b[H");
             continue;
         }
+        if (std.mem.eql(u8, code, "cls")) {
+            interpreter.variables.clearRetainingCapacity();
+            interpreter.functions.clearRetainingCapacity();
+            interpreter.structs.clearRetainingCapacity();
+            continue;
+        }
         if (code.len == 0) continue;
         const statements = try interpreter.preprocess(code);
         for (statements) |statement| try interpreter.interpret(statement);

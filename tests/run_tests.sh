@@ -95,6 +95,22 @@ if command -v script >/dev/null 2>&1; then
         printf '%s\n' "$debug_output"
         ((failed+=1))
     fi
+    cls_output="$(printf 'x = 5\ncls\nprint x\nexit\n' | script -q -c "$bin" /dev/null 2>&1)"
+    if grep -Fq 'Unknown variable or expression: x' <<<"$cls_output"; then
+        printf '[OK] REPL cls clears interpreter state\n'
+        ((passed+=1))
+    else
+        printf '[FAIL] REPL cls clears interpreter state\n'
+        printf '%s\n' "$cls_output"
+        ((failed+=1))
+    fi
+fi
+if command -v python3 >/dev/null 2>&1; then
+    if tests/test_http_import.sh "$bin"; then
+        ((passed+=1))
+    else
+        ((failed+=1))
+    fi
 fi
 printf '%d passed, %d failed\n' "$passed" "$failed"
 ((failed == 0))
