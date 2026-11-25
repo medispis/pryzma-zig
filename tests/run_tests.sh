@@ -88,6 +88,20 @@ else
     printf '%s\n' "$removedirs_output"
     ((failed+=1))
 fi
+copy_source="$mkdir_tmp/source.txt"
+copy_destination="$mkdir_tmp/copy.txt"
+copy_program="$mkdir_tmp/copyfile.pryzma"
+printf 'copy parity source\n' >"$copy_source"
+printf 'copyfile("%s", "%s")\n' "$copy_source" "$copy_destination" >"$copy_program"
+copy_output="$("$bin" "$copy_program" 2>&1)"
+if [[ -z "$copy_output" && -f "$copy_destination" ]] && cmp -s "$copy_source" "$copy_destination"; then
+    printf '[OK] copyfile statement\n'
+    ((passed+=1))
+else
+    printf '[FAIL] copyfile statement\n'
+    printf '%s\n' "$copy_output"
+    ((failed+=1))
+fi
 rm -rf "$mkdir_tmp"
 if command -v script >/dev/null 2>&1; then
     repl_output="$(printf 'print "alpha"\nhistory\nhistory print\nhistory 1\nhistory clear\nhistory\nexit\n' | script -q -c "$bin" /dev/null 2>&1)"
