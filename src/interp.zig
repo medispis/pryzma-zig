@@ -2297,6 +2297,14 @@ pub const Interpreter = struct {
                 self.out("\n");
                 continue;
             }
+            if (std.mem.startsWith(u8, cmd, "!") and !std.mem.startsWith(u8, cmd, "!!")) {
+                const was_debugging = self.debug;
+                self.debug = false;
+                try self.interpret(std.mem.trim(u8, cmd[1..], " \t"));
+                self.debug = was_debugging;
+                self.out("\n\n");
+                continue;
+            }
             if (std.mem.startsWith(u8, cmd, "b ")) {
                 const n = std.fmt.parseInt(usize, std.mem.trim(u8, cmd[2..], " \t"), 10) catch continue;
                 try self.breakpoints.append(self.allocator, n);
