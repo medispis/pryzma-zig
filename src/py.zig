@@ -24,7 +24,7 @@ extern "c" fn PyLong_AsLongLong(obj: *PyObject) c_longlong;
 extern "c" fn PyFloat_AsDouble(obj: *PyObject) f64;
 extern "c" fn PyFloat_FromDouble(v: f64) ?*PyObject;
 extern "c" fn PyBool_FromLong(v: c_long) ?*PyObject;
-extern "c" fn PyObject_IsTrue(obj: *PyObject) c_int;
+pub extern "c" fn PyObject_IsTrue(obj: *PyObject) c_int;
 extern "c" fn PyList_New(size: isize) ?*PyObject;
 extern "c" fn PyList_SetItem(list: *PyObject, index: isize, item: *PyObject) c_int;
 extern "c" fn PyList_Append(list: *PyObject, item: *PyObject) c_int;
@@ -153,6 +153,9 @@ pub const Py = struct {
         \\
         \\def load_c(path):
         \\    return ctypes.CDLL(path)
+        \\
+        \\def c_get(lib, name):
+        \\    return c_attr(lib, name)
         \\
         \\def c_attr(lib, name):
         \\    f = getattr(lib, name)

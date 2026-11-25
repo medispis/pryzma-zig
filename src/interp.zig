@@ -6,6 +6,10 @@ const Value = value.Value;
 const List = value.List;
 const Dict = value.Dict;
 extern "c" fn rand() c_int;
+extern "c" fn malloc(usize) ?*anyopaque;
+extern "c" fn free(?*anyopaque) void;
+extern "c" fn mmap(?*anyopaque, usize, c_int, c_int, c_int, i64) ?*anyopaque;
+extern "c" fn munmap(?*anyopaque, usize) c_int;
 
 pub const LineMap = struct {
     text: []const u8,
@@ -61,6 +65,9 @@ pub const Interpreter = struct {
     main_file: i64 = 1,
     asm_backend: []const u8 = "emu",
     manual_memory_enabled: bool = false,
+    memory_slots: std.StringHashMap(usize),
+    asm_slots: std.StringHashMap(usize),
+    asm_slot_names: std.ArrayList([]const u8) = .empty,
 
     lines_map: std.ArrayList(LineMap) = .empty,
     lines_map_done: bool = false,
@@ -83,6 +90,8 @@ pub const Interpreter = struct {
             .locals = std.StringHashMap(std.ArrayList(LocalEntry)).init(allocator),
             .defer_stack = std.StringHashMap(std.ArrayList([]const u8)).init(allocator),
             .custom_handlers = std.StringHashMap(*anyopaque).init(allocator),
+            .memory_slots = std.StringHashMap(usize).init(allocator),
+            .asm_slots = std.StringHashMap(usize).init(allocator),
         };
         try self.in_func.append(allocator, false);
         try self.function_tracker.append(allocator, null);
@@ -107,6 +116,20 @@ pub const Interpreter = struct {
 
     pub fn setVar(self: *Interpreter, name: []const u8, val: Value) !void {
         const key = try self.dup(name);
+        if (self.manual_memory_enabled and value.isNumber(val)) {
+            if (self.memory_slots.get(name)) |addr| {
+                const slot: *i64 = @ptrFromInt(addr);
+                slot.* = value.asInt(val) orelse 0;
+                try self.variables.put(key, val);
+                return;
+            }
+            if (malloc(@sizeOf(i64))) |ptr| {
+                const addr: usize = @intFromPtr(ptr);
+                const slot: *i64 = @ptrCast(@alignCast(ptr));
+                slot.* = value.asInt(val) orelse 0;
+                try self.memory_slots.put(key, addr);
+            }
+        }
         try self.variables.put(key, val);
     }
 
@@ -148,6 +171,12 @@ pub const Interpreter = struct {
 
     pub fn lookupVar(self: *Interpreter, name: []const u8) ?Value {
         if (self.lookupLocal(name)) |v| return v;
+        if (self.manual_memory_enabled) {
+            if (self.memory_slots.get(name)) |addr| {
+                const slot: *i64 = @ptrFromInt(addr);
+                return .{ .int = slot.* };
+            }
+        }
         return self.variables.get(name);
     }
 
@@ -157,8 +186,8 @@ pub const Interpreter = struct {
 
     pub fn runtimeError(self: *Interpreter, code: i64, message: []const u8) void {
         self.err = code;
+        self.variables.put("err", .{ .int = code }) catch {};
         if (!self.in_try_block) {
-            self.variables.put("err", .{ .int = code }) catch {};
             if (self.in_func.items[self.in_func.items.len - 1]) {
                 if (self.function_tracker.items[self.function_tracker.items.len - 1]) |name| {
                     self.printFmt("Error while calling function '{s}'\n", .{name});
@@ -352,6 +381,20 @@ pub const Interpreter = struct {
     fn interpretStatement(self: *Interpreter, line: []const u8) anyerror!void {
         if (std.mem.startsWith(u8, line, "print")) {
             try self.printValue(line[5..]);
+        } else if (std.mem.startsWith(u8, line, "struct ")) {
+            try self.defineStruct(line);
+        } else if (std.mem.startsWith(u8, line, "{") and std.mem.indexOfScalar(u8, line, '=') != null) {
+            const eq = std.mem.indexOfScalar(u8, line, '=').?;
+            const name_text = std.mem.trim(u8, line[1..eq], " \t}");
+            const names = try self.splitArgs(name_text);
+            const instance = try self.evalExpr(line[eq + 1 ..]);
+            if (instance == .dict) {
+                for (names, 0..) |raw_name, i| {
+                    if (i >= instance.dict.keys.items.len) break;
+                    const name = std.mem.trim(u8, raw_name, " \t");
+                    try self.setVar(name, instance.dict.values.items[i]);
+                }
+            }
         } else if (std.mem.startsWith(u8, line, "int")) {
             var rest = std.mem.trim(u8, line[3..], " \t");
             if (std.mem.indexOf(u8, rest, "=")) |eq| {
@@ -390,8 +433,18 @@ pub const Interpreter = struct {
             try self.interpretFor(line);
         } else if (std.mem.startsWith(u8, line, "foreach")) {
             try self.interpretForeach(line);
-        } else if (std.mem.startsWith(u8, line, "struct ")) {
-            try self.defineStruct(line);
+        } else if (std.mem.startsWith(u8, line, "using ")) {
+            try self.usingValue(line);
+        } else if (std.mem.startsWith(u8, line, "match(")) {
+            try self.interpretMatch(line);
+        } else if (std.mem.startsWith(u8, line, "try{")) {
+            try self.interpretTry(line);
+        } else if (std.mem.startsWith(u8, line, "asm{") and line[line.len - 1] == '}') {
+            try self.executeAsm(line);
+        } else if (std.mem.startsWith(u8, line, "pyextern ")) {
+            try self.bindPyExtern(line);
+        } else if (std.mem.startsWith(u8, line, "extern ")) {
+            try self.bindExtern(line);
         } else if (std.mem.startsWith(u8, line, "append ")) {
             const args = try self.splitArgs(line[7..]);
             if (args.len == 2) {
@@ -447,6 +500,19 @@ pub const Interpreter = struct {
             try self.defineFunction(line);
         } else if (std.mem.startsWith(u8, line, "@")) {
             try self.callStatement(line[1..]);
+        } else if (std.mem.indexOf(u8, line, ".@")) |method_pos| {
+            const object = std.mem.trim(u8, line[0..method_pos], " \t");
+            const rest = line[method_pos + 2 ..];
+            const open = std.mem.indexOfScalar(u8, rest, '(') orelse return;
+            const name = std.mem.trim(u8, rest[0..open], " \t");
+            const args = if (rest[rest.len - 1] == ')') rest[open + 1 .. rest.len - 1] else "";
+            const rewritten = try std.fmt.allocPrint(self.allocator, "@{s}({s}{s}{s})", .{
+                name,
+                object,
+                if (args.len == 0) "" else ",",
+                args,
+            });
+            try self.interpret(rewritten);
         } else if (std.mem.startsWith(u8, line, "return")) {
             self.ret_val = try self.evalExpr(std.mem.trim(u8, line[6..], " \t"));
         } else if (std.mem.eql(u8, line, "break")) {
@@ -498,6 +564,82 @@ pub const Interpreter = struct {
         try self.functions.put(try self.dup(name), fn_def);
     }
 
+    fn executeAsm(self: *Interpreter, line: []const u8) !void {
+        self.asm_slots.clearRetainingCapacity();
+        self.asm_slot_names.clearRetainingCapacity();
+        const body = line[4 .. line.len - 1];
+        const raw_lines = try self.splitPipes(body);
+        var code: std.ArrayList(u8) = .empty;
+        for (raw_lines) |raw| {
+            const instruction_value = try self.evalExpr(std.mem.trim(u8, raw, " \t\r\n"));
+            if (instruction_value != .string) continue;
+            const instruction = std.mem.trim(u8, instruction_value.string, " \t\r\n");
+            const space = std.mem.indexOfAny(u8, instruction, " \t") orelse continue;
+            const op = instruction[0..space];
+            const operands = try self.splitArgs(std.mem.trim(u8, instruction[space..], " \t"));
+            if (operands.len != 2) continue;
+            const dst = std.mem.trim(u8, operands[0], " \t");
+            const src = std.mem.trim(u8, operands[1], " \t");
+            if (std.mem.eql(u8, op, "mov")) {
+                if (isAsmRegister(dst)) {
+                    if (isAsmRegister(src)) {
+                        if (std.mem.eql(u8, dst, src)) continue;
+                        try code.appendSlice(self.allocator, &.{ 0x48, 0x89, asmRegModRm(dst, src) });
+                    } else if (isIntegerLiteral(src)) {
+                        const imm = std.fmt.parseInt(i64, src, 0) catch 0;
+                        try appendMovImm64(self.allocator, &code, dst, imm);
+                    } else {
+                        const slot = try self.asmSlot(src);
+                        try appendRipMem(self.allocator, &code, &.{ 0x48, 0x8b, asmRegRip(dst) }, slot, code.items.len);
+                    }
+                } else if (isAsmRegister(src)) {
+                    const slot = try self.asmSlot(dst);
+                    try appendRipMem(self.allocator, &code, &.{ 0x48, 0x89, asmRegStoreRip(src) }, slot, code.items.len);
+                }
+            } else if (isAsmRegister(dst) and (std.mem.eql(u8, op, "add") or std.mem.eql(u8, op, "sub"))) {
+                if (isIntegerLiteral(src)) {
+                    const imm = std.fmt.parseInt(i32, src, 0) catch 0;
+                    try code.appendSlice(self.allocator, if (std.mem.eql(u8, op, "add")) &.{ 0x48, 0x05 } else &.{ 0x48, 0x2d });
+                    try appendI32(self.allocator, &code, imm);
+                } else if (isAsmRegister(src)) {
+                    try code.appendSlice(self.allocator, &.{ 0x48, if (std.mem.eql(u8, op, "add")) 0x01 else 0x29, asmRegModRm(src, dst) });
+                } else {
+                    const slot = try self.asmSlot(src);
+                    const opcode: u8 = if (std.mem.eql(u8, op, "add")) 0x03 else 0x2b;
+                    try appendRipMem(self.allocator, &code, &.{ 0x48, opcode, asmRegRip(dst) }, slot, code.items.len);
+                }
+            }
+        }
+        try code.append(self.allocator, 0xc3); // ret
+        if (code.items.len >= 2048) return error.AsmProgramTooLarge;
+        const mem = mmap(null, 4096, 7, 0x22, -1, 0) orelse return error.AsmMapFailed;
+        defer _ = munmap(mem, 4096);
+        const bytes: [*]u8 = @ptrCast(mem);
+        @memcpy(bytes[0..code.items.len], code.items);
+        for (self.asm_slot_names.items, 0..) |name, i| {
+            const offset = 2048 + i * 8;
+            const slot: *i64 = @ptrCast(@alignCast(bytes + offset));
+            const current = self.lookupVar(name) orelse .none;
+            slot.* = value.asInt(current) orelse 0;
+        }
+        const function: *const fn () callconv(.c) void = @ptrCast(@alignCast(mem));
+        function();
+        for (self.asm_slot_names.items, 0..) |name, i| {
+            const offset = 2048 + i * 8;
+            const slot: *i64 = @ptrCast(@alignCast(bytes + offset));
+            try self.setVar(name, .{ .int = slot.* });
+        }
+    }
+
+    fn asmSlot(self: *Interpreter, name: []const u8) !usize {
+        if (self.asm_slots.get(name)) |offset| return offset;
+        const index = self.asm_slot_names.items.len;
+        const offset = 2048 + index * 8;
+        try self.asm_slots.put(try self.dup(name), offset);
+        try self.asm_slot_names.append(self.allocator, try self.dup(name));
+        return offset;
+    }
+
     fn processPragma(self: *Interpreter, line: []const u8) !void {
         const pragma = std.mem.trim(u8, line[1..], " \t");
         if (std.mem.startsWith(u8, pragma, "replace")) {
@@ -530,14 +672,26 @@ pub const Interpreter = struct {
         if (std.mem.eql(u8, directive, "asm_native") or std.mem.eql(u8, directive, "anat")) self.asm_backend = "native";
         if (std.mem.eql(u8, directive, "asm_emu") or std.mem.eql(u8, directive, "aemu")) self.asm_backend = "emu";
         if (std.mem.eql(u8, directive, "mm") or std.mem.eql(u8, directive, "mmraw")) self.manual_memory_enabled = true;
-        if (std.mem.eql(u8, directive, "amm")) self.manual_memory_enabled = false;
+        if (std.mem.eql(u8, directive, "amm")) {
+            var it = self.memory_slots.iterator();
+            while (it.next()) |entry| {
+                if (self.variables.get(entry.key_ptr.*)) |v| {
+                    const slot: *i64 = @ptrFromInt(entry.value_ptr.*);
+                    _ = self.variables.put(entry.key_ptr.*, .{ .int = slot.* }) catch {};
+                    _ = v;
+                }
+                free(@ptrFromInt(entry.value_ptr.*));
+            }
+            self.memory_slots.clearRetainingCapacity();
+            self.manual_memory_enabled = false;
+        }
     }
 
     fn defineStruct(self: *Interpreter, line: []const u8) !void {
         const open = std.mem.indexOfScalar(u8, line, '{') orelse return;
         const close = std.mem.lastIndexOfScalar(u8, line, '}') orelse return;
         const name = std.mem.trim(u8, line[7..open], " \t");
-        const fields = try self.splitArgs(line[open + 1 .. close]);
+        const fields = try splitCommaOrPipe(self, line[open + 1 .. close]);
         const d = try Dict.create(self.allocator);
         for (fields) |field_raw| {
             const field = std.mem.trim(u8, field_raw, " \t\r\n");
@@ -551,6 +705,77 @@ pub const Interpreter = struct {
             }
         }
         try self.structs.put(try self.dup(name), d);
+    }
+
+    fn usingValue(self: *Interpreter, line: []const u8) !void {
+        var rest = std.mem.trim(u8, line[6..], " \t");
+        const is_global = std.mem.startsWith(u8, rest, "global ");
+        if (is_global) rest = std.mem.trim(u8, rest[7..], " \t");
+        var v = try self.evalExpr(rest);
+        if (v == .reference) v = self.lookupVar(v.reference.var_name) orelse .none;
+        if (v != .dict) {
+            self.runtimeError(42, "'using' statement can only be used with structs.");
+            return;
+        }
+        for (v.dict.keys.items, v.dict.values.items) |key, val| {
+            if (key != .string) continue;
+            if (is_global or !self.in_func.items[self.in_func.items.len - 1]) {
+                try self.setVar(key.string, val);
+            } else {
+                try self.pushLocal(key.string, val);
+            }
+        }
+    }
+
+    fn interpretTry(self: *Interpreter, line: []const u8) !void {
+        const catch_pos = std.mem.indexOf(u8, line, "}catch(");
+        const body_end = if (catch_pos) |p| p else line.len - 1;
+        const body = line[4..body_end];
+        const saved_try = self.in_try_block;
+        self.in_try_block = true;
+        try self.runBody(body);
+        self.in_try_block = saved_try;
+        if (catch_pos) |p| {
+            const code_start = p + 7;
+            const code_end = std.mem.indexOfScalarPos(u8, line, code_start, ')') orelse return;
+            const wanted = std.fmt.parseInt(i64, line[code_start..code_end], 10) catch return;
+            if (self.err == wanted) {
+                const open = std.mem.indexOfScalarPos(u8, line, code_end, '{') orelse return;
+                const close = std.mem.lastIndexOfScalar(u8, line, '}') orelse return;
+                self.err = 0;
+                try self.runBody(line[open + 1 .. close]);
+            }
+        }
+    }
+
+    fn interpretMatch(self: *Interpreter, line: []const u8) !void {
+        const open_paren = std.mem.indexOfScalar(u8, line, '(') orelse return;
+        const close_paren = findMatching(line, open_paren, '(', ')') orelse return;
+        const match_value = try self.evalExpr(line[open_paren + 1 .. close_paren]);
+        const open_brace = std.mem.indexOfScalarPos(u8, line, close_paren, '{') orelse return;
+        const close_brace = std.mem.lastIndexOfScalar(u8, line, '}') orelse return;
+        const body = line[open_brace + 1 .. close_brace];
+        const cases = try self.splitPipes(body);
+        var default_body: ?[]const u8 = null;
+        for (cases) |raw| {
+            const c = std.mem.trim(u8, raw, " \t\r\n");
+            if (!std.mem.startsWith(u8, c, "case(")) continue;
+            const cp = std.mem.indexOfScalar(u8, c, '(') orelse continue;
+            const ce = findMatching(c, cp, '(', ')') orelse continue;
+            const cb = std.mem.indexOfScalarPos(u8, c, ce, '{') orelse continue;
+            const cend = std.mem.lastIndexOfScalar(u8, c, '}') orelse continue;
+            const test_expr = std.mem.trim(u8, c[cp + 1 .. ce], " \t");
+            if (std.mem.eql(u8, test_expr, "_")) {
+                default_body = c[cb + 1 .. cend];
+                continue;
+            }
+            const candidate = try self.evalExpr(test_expr);
+            if (value.eql(candidate, match_value)) {
+                try self.runBody(c[cb + 1 .. cend]);
+                return;
+            }
+        }
+        if (default_body) |b| try self.runBody(b);
     }
 
     fn callStatement(self: *Interpreter, text: []const u8) !void {
@@ -570,7 +795,98 @@ pub const Interpreter = struct {
                 if (t.len != 0) try arg_values.append(self.allocator, try self.evalExpr(t));
             }
         }
-        _ = try self.callFunction(name, arg_values.items);
+        self.ret_val = try self.callFunction(name, arg_values.items);
+    }
+
+    fn bindPyExtern(self: *Interpreter, line: []const u8) !void {
+        const rest = std.mem.trim(u8, line[9..], " \t");
+        const parsed = parseQuotedOrWord(rest) orelse return;
+        const module_ref = parsed.value;
+        const specs_text = std.mem.trim(u8, rest[parsed.end..], " \t");
+        const python = self.python orelse return;
+        const base = try python.newString(self.file_path);
+        const module_ref_py = try python.newString(module_ref);
+        const module = try python.callHelper("load_pyextern", &.{ module_ref_py, base });
+        defer py_mod.Py_DecRef(module);
+        py_mod.Py_DecRef(base);
+        py_mod.Py_DecRef(module_ref_py);
+        if (py_mod.PyObject_IsTrue(module) == 0) return;
+        var names = std.ArrayList([]const u8).empty;
+        if (specs_text.len >= 2 and specs_text[0] == '{' and specs_text[specs_text.len - 1] == '}') {
+            names = .empty;
+            const split = try splitCommaOrPipe(self, specs_text[1 .. specs_text.len - 1]);
+            try names.appendSlice(self.allocator, split);
+        } else {
+            try names.append(self.allocator, specs_text);
+        }
+        for (names.items) |raw| {
+            const spec = std.mem.trim(u8, raw, " \t\r\n");
+            if (spec.len == 0) continue;
+            if (std.mem.eql(u8, spec, "*")) {
+                const public = try python.callHelper("public_callables", &.{module});
+                var pos: isize = 0;
+                var key: ?*py_mod.PyObject = null;
+                var callable: ?*py_mod.PyObject = null;
+                while (py_mod.PyDict_Next(public, &pos, &key, &callable) != 0) {
+                    const name_value = try python.fromPy(key.?);
+                    if (name_value != .string) continue;
+                    py_mod.Py_IncRef(callable.?);
+                    const ext = try self.allocator.create(value.ExternFn);
+                    ext.* = .{ .callable = callable.?, .name = name_value.string, .is_c = false };
+                    try self.setVar(name_value.string, .{ .extern_fn = ext });
+                }
+                py_mod.Py_DecRef(public);
+                continue;
+            }
+            const alias_pos = std.mem.indexOf(u8, spec, " as ");
+            const path = std.mem.trim(u8, if (alias_pos) |i| spec[0..i] else spec, " \t");
+            const alias = std.mem.trim(u8, if (alias_pos) |i| spec[i + 4 ..] else lastPathPart(path), " \t");
+            const py_path = try python.newString(path);
+            const callable = try python.callHelper("resolve_attr", &.{ module, py_path });
+            py_mod.Py_DecRef(py_path);
+            if (py_mod.PyObject_IsTrue(callable) == 0) {
+                py_mod.Py_DecRef(callable);
+                continue;
+            }
+            const ext = try self.allocator.create(value.ExternFn);
+            ext.* = .{ .callable = callable, .name = try self.dup(alias), .is_c = false };
+            try self.setVar(alias, .{ .extern_fn = ext });
+        }
+    }
+
+    fn bindExtern(self: *Interpreter, line: []const u8) !void {
+        const rest = std.mem.trim(u8, line[7..], " \t");
+        const parsed = parseQuotedOrWord(rest) orelse return;
+        const specs_text = std.mem.trim(u8, rest[parsed.end..], " \t");
+        const python = self.python orelse return;
+        const path = try python.newString(parsed.value);
+        const lib = try python.callHelper("load_c", &.{path});
+        py_mod.Py_DecRef(path);
+        defer py_mod.Py_DecRef(lib);
+        var names = std.ArrayList([]const u8).empty;
+        if (specs_text.len >= 2 and specs_text[0] == '{' and specs_text[specs_text.len - 1] == '}') {
+            names = .empty;
+            const split = try splitCommaOrPipe(self, specs_text[1 .. specs_text.len - 1]);
+            try names.appendSlice(self.allocator, split);
+        } else {
+            try names.append(self.allocator, specs_text);
+        }
+        for (names.items) |raw| {
+            const name = std.mem.trim(u8, raw, " \t\r\n");
+            if (name.len == 0) continue;
+            if (std.mem.eql(u8, name, "*")) {
+                continue;
+            }
+            const py_name = try python.newString(name);
+            const callable = python.callHelper("c_get", &.{ lib, py_name }) catch {
+                py_mod.Py_DecRef(py_name);
+                continue;
+            };
+            py_mod.Py_DecRef(py_name);
+            const ext = try self.allocator.create(value.ExternFn);
+            ext.* = .{ .callable = callable, .name = try self.dup(name), .is_c = true };
+            try self.setVar(name, .{ .extern_fn = ext });
+        }
     }
 
     pub fn callFunction(self: *Interpreter, name_in: []const u8, args: []Value) anyerror!Value {
@@ -578,6 +894,7 @@ pub const Interpreter = struct {
         if (self.lookupVar(name)) |v| {
             switch (v) {
                 .func_ref => |n| name = n,
+                .extern_fn => |ext| return try self.callExtern(ext, args),
                 .string => |s| if (self.functions.contains(s)) {
                     name = s;
                 },
@@ -606,11 +923,43 @@ pub const Interpreter = struct {
             if (self.return_stops and std.mem.startsWith(u8, inst, "return")) break;
         }
 
+        const defer_key = try std.fmt.allocPrint(self.allocator, "{s}:{d}", .{ name, func_id });
+        if (self.defer_stack.getPtr(defer_key)) |deferred| {
+            while (deferred.items.len > 0) {
+                const body = deferred.pop().?;
+                try self.runBody(body);
+            }
+        }
         const result = self.ret_val;
+        if (!self.escape and self.gc) {
+            var locals_it = self.locals.iterator();
+            while (locals_it.next()) |entry| {
+                var entries = entry.value_ptr;
+                var i = entries.items.len;
+                while (i > 0) {
+                    i -= 1;
+                    if (entries.items[i].func_id == func_id) _ = entries.orderedRemove(i);
+                }
+            }
+        }
         _ = self.in_func.pop();
         _ = self.function_tracker.pop();
         _ = self.function_ids.pop();
         return result;
+    }
+
+    fn callExtern(self: *Interpreter, ext: *value.ExternFn, args: []Value) !Value {
+        const python = self.python orelse return .none;
+        const py_args = try List.create(self.allocator);
+        for (args) |arg| try py_args.append(arg);
+        const callable: *py_mod.PyObject = ext.callable;
+        const py_list = try python.toPy(.{ .list = py_args }, ext.is_c);
+        const py_is_c = try python.newBool(ext.is_c);
+        defer py_mod.Py_DecRef(py_list);
+        defer py_mod.Py_DecRef(py_is_c);
+        const result = try python.callHelper("call_extern", &.{ callable, py_list, py_is_c });
+        defer py_mod.Py_DecRef(result);
+        return try python.fromPy(result);
     }
 
     fn interpretIf(self: *Interpreter, line: []const u8) !void {
@@ -813,6 +1162,7 @@ pub const Interpreter = struct {
 
     fn assignValue(self: *Interpreter, target: []const u8, expr: []const u8) !void {
         const v = try self.evalExpr(expr);
+        const assigned: Value = if (v == .dict) .{ .dict = try v.dict.copy() } else v;
         var name = target;
         if (std.mem.startsWith(u8, name, "*")) {
             name = std.mem.trim(u8, name[1..], " \t");
@@ -821,7 +1171,7 @@ pub const Interpreter = struct {
                 const ref = rv.reference;
                 if (ref.addr != null and self.manual_memory_enabled) {
                     const ptr: *i64 = @ptrFromInt(ref.addr.?);
-                    ptr.* = value.asInt(v) orelse 0;
+                    ptr.* = value.asInt(assigned) orelse 0;
                     return;
                 }
                 name = ref.var_name;
@@ -840,7 +1190,7 @@ pub const Interpreter = struct {
                 obj = try self.getField(obj, field);
                 rest = rest[next_dot + 1 ..];
             }
-            try self.setField(obj, std.mem.trim(u8, rest, " \t"), v);
+            try self.setField(obj, std.mem.trim(u8, rest, " \t"), assigned);
             return;
         }
         if (std.mem.indexOfScalar(u8, name, '[')) |bracket| {
@@ -854,7 +1204,7 @@ pub const Interpreter = struct {
                 if (close + 1 < name.len and name[close + 1] == '[') {
                     obj = try self.indexValue(obj, idx_v);
                 } else {
-                    try self.setIndex(obj, idx_v, v);
+                    try self.setIndex(obj, idx_v, assigned);
                     return;
                 }
                 pos = close + 1;
@@ -862,29 +1212,46 @@ pub const Interpreter = struct {
             return;
         }
         if (self.locals.contains(name)) {
-            try self.setLocalByName(name, v);
+            try self.setLocalByName(name, assigned);
         } else {
-            try self.setVar(name, v);
+            try self.setVar(name, assigned);
         }
     }
 
     fn setLocalByName(self: *Interpreter, name: []const u8, v: Value) !void {
         const entries = self.locals.getPtr(name) orelse return;
-        var i = entries.items.len;
-        while (i > 0) {
-            i -= 1;
-            const e = &entries.items[i];
-            if (optionalNameEql(e.func_name, self.function_tracker.items[self.function_tracker.items.len - 1]) and
-                e.func_id == self.function_ids.items[self.function_ids.items.len - 1])
-            {
-                e.val = v;
-                return;
+        var frame = self.function_tracker.items.len;
+        while (frame > 0) {
+            frame -= 1;
+            var i = entries.items.len;
+            while (i > 0) {
+                i -= 1;
+                const e = &entries.items[i];
+                if (optionalNameEql(e.func_name, self.function_tracker.items[frame]) and
+                    e.func_id == self.function_ids.items[frame])
+                {
+                    e.val = v;
+                    return;
+                }
             }
+        }
+        if (entries.items.len > 0 and self.escape) {
+            entries.items[entries.items.len - 1].val = v;
+            return;
         }
         try entries.append(self.allocator, .{ .val = v, .func_name = self.function_tracker.items[self.function_tracker.items.len - 1], .func_id = self.function_ids.items[self.function_ids.items.len - 1] });
     }
 
     fn incrementVar(self: *Interpreter, target: []const u8, expr: []const u8) !void {
+        if (std.mem.indexOfScalar(u8, target, '[')) |bracket| {
+            const close = std.mem.lastIndexOfScalar(u8, target, ']') orelse return;
+            const base_name = std.mem.trim(u8, target[0..bracket], " \t");
+            const obj = self.lookupVar(base_name) orelse return;
+            const idx = try self.evalExpr(target[bracket + 1 .. close]);
+            const old = try self.indexValue(obj, idx);
+            try self.setIndex(obj, idx, value.add(old, try self.evalExpr(expr)));
+            return;
+        }
         const cur = self.lookupVar(target) orelse .none;
         const add = try self.evalExpr(expr);
         const nv = value.add(cur, add);
@@ -892,6 +1259,15 @@ pub const Interpreter = struct {
     }
 
     fn decrementVar(self: *Interpreter, target: []const u8, expr: []const u8) !void {
+        if (std.mem.indexOfScalar(u8, target, '[')) |bracket| {
+            const close = std.mem.lastIndexOfScalar(u8, target, ']') orelse return;
+            const base_name = std.mem.trim(u8, target[0..bracket], " \t");
+            const obj = self.lookupVar(base_name) orelse return;
+            const idx = try self.evalExpr(target[bracket + 1 .. close]);
+            const old = try self.indexValue(obj, idx);
+            try self.setIndex(obj, idx, value.sub(old, try self.evalExpr(expr)));
+            return;
+        }
         const cur = self.lookupVar(target) orelse .none;
         const sub = try self.evalExpr(expr);
         const nv = value.sub(cur, sub);
@@ -915,6 +1291,21 @@ pub const Interpreter = struct {
     pub fn evalExpr(self: *Interpreter, expr_in: []const u8) anyerror!Value {
         var expr = std.mem.trim(u8, expr_in, " \t\r\n");
         if (expr.len == 0) return .none;
+        if (std.mem.startsWith(u8, expr, "read(") and expr[expr.len - 1] == ')') {
+            const addr = value.asInt(try self.evalExpr(expr[5 .. expr.len - 1])) orelse 0;
+            if (addr >= 0 and addr < self.mem.len) return .{ .int = self.mem[@intCast(addr)] };
+            return .none;
+        }
+        if (std.mem.startsWith(u8, expr, "addr(") and expr[expr.len - 1] == ')') {
+            const target = try self.evalExpr(expr[5 .. expr.len - 1]);
+            if (target == .reference and target.reference.addr != null) return .{ .int = @intCast(target.reference.addr.?) };
+            return .none;
+        }
+        if (std.mem.startsWith(u8, expr, "~")) {
+            const lazy = try self.allocator.create(value.Lazy);
+            lazy.* = .{ .interp = self, .expr = try self.dup(expr[1..]) };
+            return .{ .lazy = lazy };
+        }
 
         if (isIntegerLiteral(expr)) {
             return .{ .int = std.fmt.parseInt(i64, expr, 0) catch 0 };
@@ -1098,6 +1489,39 @@ pub const Interpreter = struct {
                 return .{ .int = lo + @mod(@as(i64, rand()), @max(hi - lo + 1, 1)) };
             }
         }
+        if (findTopLevel(expr, "{")) |brace| {
+            const struct_name = std.mem.trim(u8, expr[0..brace], " \t");
+            if (self.structs.get(struct_name)) |definition| {
+                const close = std.mem.lastIndexOfScalar(u8, expr, '}') orelse return .none;
+                const raw_args = try splitCommaOrPipe(self, expr[brace + 1 .. close]);
+                const named = try Dict.create(self.allocator);
+                const positional = try List.create(self.allocator);
+                for (raw_args) |raw| {
+                    const arg = std.mem.trim(u8, raw, " \t\r\n");
+                    if (arg.len == 0) continue;
+                    if (findTopLevel(arg, "=")) |eq| {
+                        const key = std.mem.trim(u8, arg[0..eq], " \t");
+                        try named.putStr(try self.dup(key), try self.evalExpr(arg[eq + 1 ..]));
+                    } else {
+                        try positional.append(try self.evalExpr(arg));
+                    }
+                }
+                const instance = try Dict.create(self.allocator);
+                instance.type_name = struct_name;
+                for (definition.keys.items, definition.values.items, 0..) |key, default, i| {
+                    if (key != .string) continue;
+                    var field = named.get(key) orelse positional.get(@intCast(i)) orelse default;
+                    if (field == .string and std.mem.startsWith(u8, field.string, "@")) {
+                        field = try self.evalExpr(field.string);
+                    }
+                    try instance.put(key, field);
+                }
+                for (named.keys.items, named.values.items) |key, val| {
+                    if (key == .string and instance.get(key) == null) try instance.put(key, val);
+                }
+                return .{ .dict = instance };
+            }
+        }
         if (std.mem.startsWith(u8, expr, "len(") and expr[expr.len - 1] == ')') {
             const v = try self.evalExpr(expr[4 .. expr.len - 1]);
             return .{ .int = @intCast(try self.lengthOf(v)) };
@@ -1136,7 +1560,7 @@ pub const Interpreter = struct {
         if (std.mem.startsWith(u8, expr, "&")) {
             const target = std.mem.trim(u8, expr[1..], " \t");
             if (self.variables.contains(target) or self.locals.contains(target)) {
-                return .{ .reference = .{ .var_name = try self.dup(target) } };
+                return .{ .reference = .{ .var_name = try self.dup(target), .addr = self.memory_slots.get(target) } };
             }
             if (self.functions.contains(target)) return .{ .func_ref = try self.dup(target) };
             return .none;
@@ -1149,6 +1573,9 @@ pub const Interpreter = struct {
                     return .{ .int = ptr.* };
                 }
                 if (self.lookupVar(rv.reference.var_name)) |v| return v;
+                if (self.locals.get(rv.reference.var_name)) |entries| {
+                    if (entries.items.len > 0) return entries.items[entries.items.len - 1].val;
+                }
                 self.runtimeError(37, try std.fmt.allocPrint(self.allocator, "Error at line {d}: Referenced variable '{s}' no longer exists", .{ self.current_line, rv.reference.var_name }));
                 return .none;
             }
@@ -1248,10 +1675,13 @@ pub const Interpreter = struct {
         if (std.mem.indexOfScalar(u8, expr, '.')) |dot| {
             const base = std.mem.trim(u8, expr[0..dot], " \t");
             const field = std.mem.trim(u8, expr[dot + 1 ..], " \t");
-            const obj = self.lookupVar(base) orelse {
-                self.runtimeError(28, try std.fmt.allocPrint(self.allocator, "Error at line {d}: Unknown variable or expression: {s}", .{ self.current_line, expr }));
-                return .none;
-            };
+            const obj = if (std.mem.indexOfScalar(u8, base, '[') != null)
+                try self.evalExpr(base)
+            else
+                self.lookupVar(base) orelse {
+                    self.runtimeError(28, try std.fmt.allocPrint(self.allocator, "Error at line {d}: Unknown variable or expression: {s}", .{ self.current_line, expr }));
+                    return .none;
+                };
             return try self.getField(obj, field);
         }
         if (findTopLevel(expr, "[")) |bracket| {
@@ -1364,6 +1794,10 @@ pub const Interpreter = struct {
 
     fn getField(self: *Interpreter, obj: Value, field_in: []const u8) !Value {
         var field = std.mem.trim(u8, field_in, " \t");
+        if (findTopLevel(field, ".")) |dot| {
+            const left = try self.getField(obj, field[0..dot]);
+            return try self.getField(left, field[dot + 1 ..]);
+        }
         if (std.mem.indexOfScalar(u8, field, '[')) |bracket| {
             if (field.len > 0 and field[field.len - 1] == ']') {
                 const base = try self.getField(obj, field[0..bracket]);
@@ -1454,6 +1888,104 @@ fn findTopLevel(text: []const u8, needle: []const u8) ?usize {
         }
     }
     return null;
+}
+
+fn splitCommaOrPipe(interp: *Interpreter, text: []const u8) ![]const []const u8 {
+    var normalized: std.ArrayList(u8) = .empty;
+    var depth: i64 = 0;
+    var quote: u8 = 0;
+    var escaped = false;
+    for (text) |c| {
+        if (escaped) {
+            try normalized.append(interp.allocator, c);
+            escaped = false;
+            continue;
+        }
+        if (c == '\\') {
+            escaped = true;
+            try normalized.append(interp.allocator, c);
+            continue;
+        }
+        if (quote != 0) {
+            if (c == quote) quote = 0;
+            try normalized.append(interp.allocator, c);
+            continue;
+        }
+        if (c == '\'' or c == '"') {
+            quote = c;
+        } else if (c == '(' or c == '[' or c == '{') {
+            depth += 1;
+        } else if (c == ')' or c == ']' or c == '}') {
+            depth -= 1;
+        }
+        try normalized.append(interp.allocator, if (depth == 0 and c == '|') ',' else c);
+    }
+    return interp.splitArgs(normalized.items);
+}
+
+const QuotedWord = struct {
+    value: []const u8,
+    end: usize,
+};
+
+fn parseQuotedOrWord(text: []const u8) ?QuotedWord {
+    if (text.len == 0) return null;
+    if (text[0] == '"' or text[0] == '\'') {
+        const quote = text[0];
+        var i: usize = 1;
+        while (i < text.len) : (i += 1) {
+            if (text[i] == quote and (i == 0 or text[i - 1] != '\\')) {
+                return .{ .value = text[1..i], .end = i + 1 };
+            }
+        }
+        return null;
+    }
+    const end = std.mem.indexOfAny(u8, text, " \t") orelse text.len;
+    return .{ .value = text[0..end], .end = end };
+}
+
+fn lastPathPart(path: []const u8) []const u8 {
+    return if (std.mem.lastIndexOfScalar(u8, path, '.')) |p| path[p + 1 ..] else path;
+}
+
+fn asmRegCode(reg: []const u8) ?u8 {
+    const names = [_][]const u8{ "rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15" };
+    for (names, 0..) |name, i| if (std.mem.eql(u8, reg, name)) return @intCast(i);
+    return null;
+}
+
+fn isAsmRegister(reg: []const u8) bool {
+    return asmRegCode(reg) != null;
+}
+
+fn asmRegModRm(dst: []const u8, src: []const u8) u8 {
+    return 0xc0 | ((asmRegCode(src) orelse 0) & 7) << 3 | ((asmRegCode(dst) orelse 0) & 7);
+}
+
+fn asmRegRip(dst: []const u8) u8 {
+    return 0x05 | ((asmRegCode(dst) orelse 0) & 7) << 3;
+}
+
+fn asmRegStoreRip(src: []const u8) u8 {
+    return 0x05 | ((asmRegCode(src) orelse 0) & 7) << 3;
+}
+
+fn appendMovImm64(allocator: Allocator, code: *std.ArrayList(u8), reg: []const u8, imm: i64) !void {
+    const n = asmRegCode(reg) orelse return;
+    try code.append(allocator, if (n >= 8) 0x49 else 0x48);
+    try code.append(allocator, 0xb8 + (n & 7));
+    try code.appendSlice(allocator, &@as([8]u8, @bitCast(imm)));
+}
+
+fn appendI32(allocator: Allocator, code: *std.ArrayList(u8), imm: i32) !void {
+    try code.appendSlice(allocator, &@as([4]u8, @bitCast(imm)));
+}
+
+fn appendRipMem(allocator: Allocator, code: *std.ArrayList(u8), prefix: []const u8, slot: usize, start: usize) !void {
+    try code.appendSlice(allocator, prefix);
+    const next_instruction = start + prefix.len + 4;
+    const displacement: i32 = @intCast(@as(isize, @intCast(slot)) - @as(isize, @intCast(next_instruction)));
+    try appendI32(allocator, code, displacement);
 }
 
 fn findMatching(s: []const u8, start: usize, open: u8, close: u8) ?usize {
