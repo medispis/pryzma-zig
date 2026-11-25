@@ -73,7 +73,7 @@ pub const Py = struct {
     initialized: bool = false,
 
     const helper_source =
-        \\import sys, os, importlib, importlib.util, ctypes, re, json, lzma, datetime, random, shutil, time
+        \\import sys, os, importlib, importlib.util, ctypes, re, json, lzma, datetime, random, shutil, time, platform
         \\
         \\class Ref:
         \\    __slots__ = ('var_name', 'addr')
@@ -102,6 +102,12 @@ pub const Py = struct {
         \\
         \\def make_self(d):
         \\    return Self(d)
+        \\
+        \\def system_info():
+        \\    now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        \\    machine = platform.machine()
+        \\    arch = '64-bit' if machine in ('x86_64', 'AMD64') else ('32-bit' if machine in ('i386', 'i686') else 'Unknown')
+        \\    return f"Pryzma 6.2\nCurrent Date and Time: {now}\nOperating System: {platform.system()} {platform.release()} {arch} ({machine})\nProcessor: {platform.processor()}\n"
         \\
         \\def load_pyextern(module_ref, base_file):
         \\    try:

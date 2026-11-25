@@ -52,6 +52,17 @@ if command -v script >/dev/null 2>&1; then
         printf '%s\n' "$repl_output"
         ((failed+=1))
     fi
+    info_output="$(printf 'info\nexit\n' | script -q -c "$bin" /dev/null 2>&1)"
+    if grep -Fq 'Current Date and Time:' <<<"$info_output" &&
+       grep -Fq 'Operating System:' <<<"$info_output" &&
+       grep -Fq 'Processor:' <<<"$info_output"; then
+        printf '[OK] REPL system information\n'
+        ((passed+=1))
+    else
+        printf '[FAIL] REPL system information\n'
+        printf '%s\n' "$info_output"
+        ((failed+=1))
+    fi
 fi
 printf '%d passed, %d failed\n' "$passed" "$failed"
 ((failed == 0))

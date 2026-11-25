@@ -195,6 +195,13 @@ fn runRepl(interpreter: *interp_mod.Interpreter, allocator: std.mem.Allocator) !
             try std.Io.File.stdout().writeStreamingAll(io, "\n");
             continue;
         }
+        if (std.mem.eql(u8, code, "info")) {
+            const result = try interpreter.python.?.callHelper("system_info", &.{});
+            defer py.Py_DecRef(result);
+            const info = try interpreter.python.?.fromPy(result);
+            if (info == .string) try std.Io.File.stdout().writeStreamingAll(io, info.string);
+            continue;
+        }
         if (std.mem.eql(u8, code, "clear")) {
             try std.Io.File.stdout().writeStreamingAll(io, "\x1b[2J\x1b[H");
             continue;
