@@ -197,6 +197,19 @@ if command -v script >/dev/null 2>&1; then
         printf '%s\n' "$for_continue_output"
         ((failed+=1))
     fi
+    foreach_output="$(printf 'debug\ntests/debug_foreach.pryzma\ns\nc\ns\nc\ns\ns\ns\nexit\n' | script -q -c "$bin" /dev/null 2>&1)"
+    foreach_values="$(grep -Fc 'Debug: Executing line 3: print item' <<<"$foreach_output" || true)"
+    foreach_tails="$(grep -Fc 'Debug: Executing line 4: print "tail"' <<<"$foreach_output" || true)"
+    if [[ "$foreach_values" == 2 && "$foreach_tails" == 2 ]] &&
+       [[ "$(grep -Fc 'debug> tail' <<<"$foreach_output" || true)" == 2 ]] &&
+       grep -Fq 'after foreach' <<<"$foreach_output"; then
+        printf '[OK] debugger foreach iteration stepping and continue\n'
+        ((passed+=1))
+    else
+        printf '[FAIL] debugger foreach iteration stepping and continue\n'
+        printf '%s\n' "$foreach_output"
+        ((failed+=1))
+    fi
     debug_log="$(mktemp)"
     printf 'debug\ntests/repl_debug.pryzma\nhelp\nclear\nlog\n%s\ns\nexit\n' "$debug_log" |
         script -q -c "$bin" /dev/null >/dev/null 2>&1

@@ -1,0 +1,6 @@
+items = [4, 5]
+foreach(item, items){
+print item
+print "tail"
+}
+print "after foreach"

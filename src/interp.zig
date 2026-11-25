@@ -1394,7 +1394,7 @@ pub const Interpreter = struct {
         defer self.in_loop = was_in_loop;
         if (self.debug_continue) self.debug_continue = false;
         for (list.items.items) |item| {
-            try self.setVar(var_name, item);
+            try self.variables.put(try self.dup(var_name), item);
             try self.runBody(body);
             if (self.debug_continue) self.debug_continue = false;
             if (self.break_stack.items[self.break_stack.items.len - 1]) break;

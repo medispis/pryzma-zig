@@ -1,0 +1,4 @@
+items = [7]
+/run{foreach(item, items){print item}}
+@run
+print item
