@@ -2184,6 +2184,25 @@ pub const Interpreter = struct {
                 return .{ .string = try self.dup(buffer[0..len]) };
             }
         }
+        if (std.mem.startsWith(u8, expr, "index(") and isWholeCall(expr, "index")) {
+            const args = try self.splitArgs(expr[6 .. expr.len - 1]);
+            if (args.len != 2) {
+                self.runtimeError(24, try std.fmt.allocPrint(self.allocator, "Error at line {d}: Invalid number of arguments for index function.", .{self.current_line}));
+                return .none;
+            }
+            const list_name = std.mem.trim(u8, args[0], " \t");
+            const wanted = try self.evalExpr(args[1]);
+            if (self.lookupVar(list_name)) |target| {
+                if (target == .list) {
+                    if (target.list.indexOf(wanted)) |position| return .{ .int = @intCast(position) };
+                    const rendered = try value.printString(self.allocator, wanted);
+                    self.runtimeError(25, try std.fmt.allocPrint(self.allocator, "Error at line {d}: Value '{s}' not found in list '{s}'.", .{ self.current_line, rendered, list_name }));
+                    return .none;
+                }
+            }
+            self.runtimeError(26, try std.fmt.allocPrint(self.allocator, "Error at line {d}: Variable '{s}' is not a list.", .{ self.current_line, list_name }));
+            return .none;
+        }
         if (std.mem.startsWith(u8, expr, "startswith(") and expr[expr.len - 1] == ')') {
             const a = try self.splitArgs(expr[11 .. expr.len - 1]);
             if (a.len == 2) {

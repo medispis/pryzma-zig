@@ -1,0 +1,2 @@
+values = ["first", "target", "target"]
+print index(values, "target")
