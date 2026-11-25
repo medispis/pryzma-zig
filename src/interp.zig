@@ -2233,6 +2233,14 @@ pub const Interpreter = struct {
             }
             return .none;
         }
+        if (std.mem.startsWith(u8, expr, "is_func(") and isWholeCall(expr, "is_func")) {
+            const candidate = try self.evalExpr(expr[8 .. expr.len - 1]);
+            return .{ .boolean = switch (candidate) {
+                .func_ref => true,
+                .string => |name| self.functions.contains(name),
+                else => false,
+            } };
+        }
         if (std.mem.startsWith(u8, expr, "startswith(") and expr[expr.len - 1] == ')') {
             const a = try self.splitArgs(expr[11 .. expr.len - 1]);
             if (a.len == 2) {

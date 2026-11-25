@@ -1,0 +1,5 @@
+/known{}
+function_ref = &known
+print is_func("known")
+print is_func(function_ref)
+print is_func("missing")
