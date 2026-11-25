@@ -52,6 +52,18 @@ else
     printf '%s\n' "$mkdir_output"
     ((failed+=1))
 fi
+makedirs_target="$mkdir_tmp/nested/path"
+makedirs_source="$mkdir_tmp/makedirs.pryzma"
+printf 'makedirs("%s")\n' "$makedirs_target" >"$makedirs_source"
+makedirs_output="$("$bin" "$makedirs_source" 2>&1)"
+if [[ -d "$makedirs_target" && -z "$makedirs_output" ]]; then
+    printf '[OK] makedirs statement\n'
+    ((passed+=1))
+else
+    printf '[FAIL] makedirs statement\n'
+    printf '%s\n' "$makedirs_output"
+    ((failed+=1))
+fi
 rm -rf "$mkdir_tmp"
 if command -v script >/dev/null 2>&1; then
     repl_output="$(printf 'print "alpha"\nhistory\nhistory print\nhistory 1\nhistory clear\nhistory\nexit\n' | script -q -c "$bin" /dev/null 2>&1)"
