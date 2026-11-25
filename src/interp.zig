@@ -2222,6 +2222,17 @@ pub const Interpreter = struct {
             self.runtimeError(26, try std.fmt.allocPrint(self.allocator, "Error at line {d}: Variable '{s}' is not a list.", .{ self.current_line, list_name }));
             return .none;
         }
+        if (std.mem.startsWith(u8, expr, "get(") and isWholeCall(expr, "get")) {
+            const args = try self.splitArgs(expr[4 .. expr.len - 1]);
+            if (args.len == 2) {
+                const dict_name = std.mem.trim(u8, args[0], " \t");
+                const key = try self.evalExpr(args[1]);
+                if (self.lookupVar(dict_name)) |target| {
+                    if (target == .dict) return target.dict.get(key) orelse .none;
+                }
+            }
+            return .none;
+        }
         if (std.mem.startsWith(u8, expr, "startswith(") and expr[expr.len - 1] == ')') {
             const a = try self.splitArgs(expr[11 .. expr.len - 1]);
             if (a.len == 2) {

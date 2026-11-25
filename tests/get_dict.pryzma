@@ -1,0 +1,3 @@
+values = {"name": "Ada", 7: "seven"}
+print get(values, "name")
+print get(values, 7)
