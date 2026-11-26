@@ -1,0 +1,6 @@
+print replace()
+print "after zero"
+print replace("x")
+print "after one"
+print replace("x", "x", "y", "extra")
+print "after many"

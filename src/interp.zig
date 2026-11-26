@@ -1944,15 +1944,17 @@ pub const Interpreter = struct {
 
         if (std.mem.startsWith(u8, expr, "replace(") and expr[expr.len - 1] == ')') {
             const a = try self.splitArgs(expr[8 .. expr.len - 1]);
-            if (a.len == 3) {
-                const src_v = try self.evalExpr(a[0]);
-                const old_v = try self.evalExpr(a[1]);
-                const new_v = try self.evalExpr(a[2]);
-                if (src_v == .string and old_v == .string and new_v == .string) {
-                    const old = if (std.mem.eql(u8, old_v.string, "\\n")) "\n" else old_v.string;
-                    const new = if (std.mem.eql(u8, new_v.string, "\\n")) "\n" else new_v.string;
-                    return .{ .string = try std.mem.replaceOwned(u8, self.allocator, src_v.string, old, new) };
-                }
+            if (a.len != 3) {
+                self.runtimeError(16, try std.fmt.allocPrint(self.allocator, "Error at line {d}: Invalid number of arguments for replace function.", .{self.current_line}));
+                return .none;
+            }
+            const src_v = try self.evalExpr(a[0]);
+            const old_v = try self.evalExpr(a[1]);
+            const new_v = try self.evalExpr(a[2]);
+            if (src_v == .string and old_v == .string and new_v == .string) {
+                const old = if (std.mem.eql(u8, old_v.string, "\\n")) "\n" else old_v.string;
+                const new = if (std.mem.eql(u8, new_v.string, "\\n")) "\n" else new_v.string;
+                return .{ .string = try std.mem.replaceOwned(u8, self.allocator, src_v.string, old, new) };
             }
             return .none;
         }
