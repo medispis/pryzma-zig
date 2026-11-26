@@ -390,6 +390,12 @@ pub const Py = struct {
         \\    except Exception as error:
         \\        return "__PRYZMA_LEN_ERROR__:" + str(error)
         \\
+        \\def list_or_error(value):
+        \\    try:
+        \\        return list(value)
+        \\    except Exception as error:
+        \\        return "__PRYZMA_LIST_ERROR__:" + str(error)
+        \\
         \\def int_or_error(value):
         \\    try:
         \\        return int(value)

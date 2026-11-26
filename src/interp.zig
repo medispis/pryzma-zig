@@ -2155,6 +2155,19 @@ pub const Interpreter = struct {
         }
         if (std.mem.startsWith(u8, expr, "list(") and expr[expr.len - 1] == ')') {
             const v = try self.evalExpr(expr[5 .. expr.len - 1]);
+            if (self.python) |python| {
+                const py_value = try python.toPy(v, false);
+                defer py_mod.Py_DecRef(py_value);
+                const result = try python.callHelper("list_or_error", &.{py_value});
+                defer py_mod.Py_DecRef(result);
+                const items = try python.fromPy(result);
+                if (items == .string and std.mem.startsWith(u8, items.string, "__PRYZMA_LIST_ERROR__:")) {
+                    self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: {s}", .{ self.current_line, items.string["__PRYZMA_LIST_ERROR__:".len..] }));
+                    self.eval_error = true;
+                    return .none;
+                }
+                return items;
+            }
             if (v == .list) return v;
             if (v == .string) {
                 const l = try List.create(self.allocator);
