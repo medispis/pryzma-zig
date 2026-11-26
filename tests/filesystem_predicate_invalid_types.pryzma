@@ -1,0 +1,4 @@
+print exists(-1)
+print is_file(-1)
+print is_dir(-1)
+print is_link(-1)

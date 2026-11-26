@@ -2189,24 +2189,42 @@ pub const Interpreter = struct {
         }
         if (std.mem.startsWith(u8, expr, "is_file(") and isWholeCall(expr, "is_file")) {
             const path = try self.evalExpr(expr[8 .. expr.len - 1]);
-            if (path == .string) {
-                const stat = std.Io.Dir.cwd().statFile(self.io, path.string, .{}) catch return .{ .boolean = false };
-                return .{ .boolean = stat.kind == .file };
+            if (self.python) |python| {
+                const py_path = try python.toPy(path, false);
+                defer py_mod.Py_DecRef(py_path);
+                const result = try python.callHelper("is_file", &.{py_path});
+                defer py_mod.Py_DecRef(result);
+                return try python.fromPy(result);
             }
+            if (path != .string) return .{ .boolean = false };
+            const stat = std.Io.Dir.cwd().statFile(self.io, path.string, .{}) catch return .{ .boolean = false };
+            return .{ .boolean = stat.kind == .file };
         }
         if (std.mem.startsWith(u8, expr, "is_dir(") and isWholeCall(expr, "is_dir")) {
             const path = try self.evalExpr(expr[7 .. expr.len - 1]);
-            if (path == .string) {
-                const stat = std.Io.Dir.cwd().statFile(self.io, path.string, .{}) catch return .{ .boolean = false };
-                return .{ .boolean = stat.kind == .directory };
+            if (self.python) |python| {
+                const py_path = try python.toPy(path, false);
+                defer py_mod.Py_DecRef(py_path);
+                const result = try python.callHelper("is_dir", &.{py_path});
+                defer py_mod.Py_DecRef(result);
+                return try python.fromPy(result);
             }
+            if (path != .string) return .{ .boolean = false };
+            const stat = std.Io.Dir.cwd().statFile(self.io, path.string, .{}) catch return .{ .boolean = false };
+            return .{ .boolean = stat.kind == .directory };
         }
         if (std.mem.startsWith(u8, expr, "exists(") and isWholeCall(expr, "exists")) {
             const path = try self.evalExpr(expr[7 .. expr.len - 1]);
-            if (path == .string) {
-                _ = std.Io.Dir.cwd().statFile(self.io, path.string, .{}) catch return .{ .boolean = false };
-                return .{ .boolean = true };
+            if (self.python) |python| {
+                const py_path = try python.toPy(path, false);
+                defer py_mod.Py_DecRef(py_path);
+                const result = try python.callHelper("exists", &.{py_path});
+                defer py_mod.Py_DecRef(result);
+                return try python.fromPy(result);
             }
+            if (path != .string) return .{ .boolean = false };
+            _ = std.Io.Dir.cwd().statFile(self.io, path.string, .{}) catch return .{ .boolean = false };
+            return .{ .boolean = true };
         }
         if (std.mem.startsWith(u8, expr, "file_size(") and isWholeCall(expr, "file_size")) {
             const path = try self.evalExpr(expr[10 .. expr.len - 1]);
@@ -2333,10 +2351,20 @@ pub const Interpreter = struct {
         }
         if (std.mem.startsWith(u8, expr, "is_link(") and isWholeCall(expr, "is_link")) {
             const path = try self.evalExpr(expr[8 .. expr.len - 1]);
-            if (path == .string) {
-                const stat = std.Io.Dir.cwd().statFile(self.io, path.string, .{ .follow_symlinks = false }) catch return .{ .boolean = false };
-                return .{ .boolean = stat.kind == .sym_link };
+            if (path != .string) {
+                self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: lstat: path should be string, bytes or os.PathLike, not {s}", .{ self.current_line, value.typeName(path) }));
+                self.eval_error = true;
+                return .none;
             }
+            if (self.python) |python| {
+                const py_path = try python.toPy(path, false);
+                defer py_mod.Py_DecRef(py_path);
+                const result = try python.callHelper("is_link", &.{py_path});
+                defer py_mod.Py_DecRef(result);
+                return try python.fromPy(result);
+            }
+            const stat = std.Io.Dir.cwd().statFile(self.io, path.string, .{ .follow_symlinks = false }) catch return .{ .boolean = false };
+            return .{ .boolean = stat.kind == .sym_link };
         }
         if (std.mem.startsWith(u8, expr, "read_link(") and isWholeCall(expr, "read_link")) {
             const path = try self.evalExpr(expr[10 .. expr.len - 1]);
