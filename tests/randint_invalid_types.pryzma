@@ -1,0 +1,5 @@
+print randint("a", 4)
+print "after lower"
+print randint(1, "b")
+print "after upper"
+print randint(True, True)

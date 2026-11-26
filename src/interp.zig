@@ -2616,8 +2616,20 @@ pub const Interpreter = struct {
                 self.eval_error = true;
                 return .none;
             }
-            const lo = value.asInt(try self.evalExpr(a[0])) orelse 0;
-            const hi = value.asInt(try self.evalExpr(a[1])) orelse lo;
+            const lower_value = try self.evalExpr(a[0]);
+            if (lower_value != .int and lower_value != .boolean) {
+                self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: '{s}' object cannot be interpreted as an integer", .{ self.current_line, value.typeName(lower_value) }));
+                self.eval_error = true;
+                return .none;
+            }
+            const upper_value = try self.evalExpr(a[1]);
+            if (upper_value != .int and upper_value != .boolean) {
+                self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: '{s}' object cannot be interpreted as an integer", .{ self.current_line, value.typeName(upper_value) }));
+                self.eval_error = true;
+                return .none;
+            }
+            const lo = value.asInt(lower_value).?;
+            const hi = value.asInt(upper_value).?;
             if (lo > hi) {
                 self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: empty range in randint({d}, {d})", .{ self.current_line, lo, hi }));
                 self.eval_error = true;
