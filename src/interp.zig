@@ -2087,6 +2087,10 @@ pub const Interpreter = struct {
         }
         if (std.mem.startsWith(u8, expr, "splitby(") and expr[expr.len - 1] == ')') {
             const a = try self.splitArgs(expr[8 .. expr.len - 1]);
+            if (a.len < 2) {
+                self.runtimeError(22, try std.fmt.allocPrint(self.allocator, "Error at line {d}: Invalid number of arguments for splitby function.", .{self.current_line}));
+                return .none;
+            }
             if (a.len >= 2) {
                 const sep = try self.evalExpr(a[0]);
                 const src = try self.evalExpr(a[1]);

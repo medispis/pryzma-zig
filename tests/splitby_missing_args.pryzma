@@ -1,0 +1,2 @@
+print splitby()
+print "after"
