@@ -2655,9 +2655,18 @@ pub const Interpreter = struct {
     }
 
     fn lengthOf(self: *Interpreter, v: Value) !usize {
-        _ = self;
         return switch (v) {
-            .string => |s| s.len,
+            .string => |s| blk: {
+                if (self.python) |python| {
+                    const py_text = try python.newString(s);
+                    defer py_mod.Py_DecRef(py_text);
+                    const result = try python.callHelper("text_length", &.{py_text});
+                    defer py_mod.Py_DecRef(result);
+                    const length = try python.fromPy(result);
+                    break :blk @intCast(value.asInt(length) orelse 0);
+                }
+                break :blk s.len;
+            },
             .list => |l| l.items.items.len,
             .tuple => |t| t.items.items.len,
             .dict => |d| d.keys.items.len,

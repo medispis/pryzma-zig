@@ -372,6 +372,9 @@ pub const Py = struct {
         \\def strip_text(value):
         \\    return value.strip()
         \\
+        \\def text_length(value):
+        \\    return len(value)
+        \\
         \\def randint(a, b):
         \\    return random.randint(a, b)
         \\
