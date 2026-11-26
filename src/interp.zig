@@ -2077,17 +2077,25 @@ pub const Interpreter = struct {
         }
         if (std.mem.startsWith(u8, expr, "in(") and expr[expr.len - 1] == ')') {
             const a = try self.splitArgs(expr[3 .. expr.len - 1]);
-            if (a.len == 2) {
-                const haystack = try self.evalExpr(a[0]);
-                const needle = try self.evalExpr(a[1]);
-                return .{ .boolean = switch (haystack) {
-                    .list => |l| l.indexOf(needle) != null,
-                    .tuple => |l| l.indexOf(needle) != null,
-                    .string => |s| needle == .string and std.mem.indexOf(u8, s, needle.string) != null,
-                    .dict => |d| d.indexOf(needle) != null,
-                    else => false,
-                } };
+            if (a.len != 2) {
+                const count = if (a.len == 0) 1 else a.len;
+                const error_text = if (count < 2)
+                    try std.fmt.allocPrint(self.allocator, "Error at line {d}: not enough values to unpack (expected 2, got {d})", .{ self.current_line, count })
+                else
+                    try std.fmt.allocPrint(self.allocator, "Error at line {d}: too many values to unpack (expected 2, got {d})", .{ self.current_line, count });
+                self.runtimeError(12, error_text);
+                self.eval_error = true;
+                return .none;
             }
+            const haystack = try self.evalExpr(a[0]);
+            const needle = try self.evalExpr(a[1]);
+            return .{ .boolean = switch (haystack) {
+                .list => |l| l.indexOf(needle) != null,
+                .tuple => |l| l.indexOf(needle) != null,
+                .string => |s| needle == .string and std.mem.indexOf(u8, s, needle.string) != null,
+                .dict => |d| d.indexOf(needle) != null,
+                else => false,
+            } };
         }
         if (std.mem.startsWith(u8, expr, "splitby(") and expr[expr.len - 1] == ')') {
             const a = try self.splitArgs(expr[8 .. expr.len - 1]);

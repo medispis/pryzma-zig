@@ -1,0 +1,7 @@
+print in()
+print "after zero"
+print in("a")
+print "after one"
+print in("a", "cat", "extra")
+print "after many"
+print in("cat", "a")
