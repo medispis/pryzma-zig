@@ -2228,6 +2228,19 @@ pub const Interpreter = struct {
         }
         if (std.mem.startsWith(u8, expr, "file_size(") and isWholeCall(expr, "file_size")) {
             const path = try self.evalExpr(expr[10 .. expr.len - 1]);
+            if (self.python) |python| {
+                const py_path = try python.toPy(path, false);
+                defer py_mod.Py_DecRef(py_path);
+                const result = try python.callHelper("file_size_or_error", &.{py_path});
+                defer py_mod.Py_DecRef(result);
+                const size = try python.fromPy(result);
+                if (size == .string and std.mem.startsWith(u8, size.string, "__PRYZMA_FILE_SIZE_ERROR__:")) {
+                    self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: {s}", .{ self.current_line, size.string["__PRYZMA_FILE_SIZE_ERROR__:".len..] }));
+                    self.eval_error = true;
+                    return .none;
+                }
+                return size;
+            }
             if (path == .string) {
                 const stat = std.Io.Dir.cwd().statFile(self.io, path.string, .{}) catch |err| {
                     const message: ?[]const u8 = if (err == error.FileNotFound)

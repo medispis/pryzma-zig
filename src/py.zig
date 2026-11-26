@@ -288,6 +288,12 @@ pub const Py = struct {
         \\def file_size(p):
         \\    return os.path.getsize(p)
         \\
+        \\def file_size_or_error(p):
+        \\    try:
+        \\        return os.path.getsize(p)
+        \\    except Exception as error:
+        \\        return "__PRYZMA_FILE_SIZE_ERROR__:" + str(error)
+        \\
         \\def file_read(p):
         \\    with open(p, 'r') as f:
         \\        return f.read()

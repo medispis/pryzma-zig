@@ -1,0 +1,2 @@
+print file_size(-1)
+print "after"
