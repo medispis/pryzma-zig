@@ -1960,19 +1960,21 @@ pub const Interpreter = struct {
         }
         if (std.mem.startsWith(u8, expr, "resplit(") and expr[expr.len - 1] == ')') {
             const a = try self.splitArgs(expr[8 .. expr.len - 1]);
-            if (a.len == 2) {
-                const pat = try self.evalExpr(a[0]);
-                const src = try self.evalExpr(a[1]);
-                if (pat == .string and src == .string) {
-                    const python = self.python orelse return .none;
-                    const pp = try python.newString(pat.string);
-                    const ps = try python.newString(src.string);
-                    const result = try python.callHelper("re_split", &.{ pp, ps });
-                    defer py_mod.Py_DecRef(result);
-                    py_mod.Py_DecRef(pp);
-                    py_mod.Py_DecRef(ps);
-                    return try python.fromPy(result);
-                }
+            if (a.len != 2) {
+                self.runtimeError(17, try std.fmt.allocPrint(self.allocator, "Error at line {d}: Invalid number of arguments for resplit(). Expected 2 arguments.", .{self.current_line}));
+                return .none;
+            }
+            const pat = try self.evalExpr(a[0]);
+            const src = try self.evalExpr(a[1]);
+            if (pat == .string and src == .string) {
+                const python = self.python orelse return .none;
+                const pp = try python.newString(pat.string);
+                const ps = try python.newString(src.string);
+                const result = try python.callHelper("re_split", &.{ pp, ps });
+                defer py_mod.Py_DecRef(result);
+                py_mod.Py_DecRef(pp);
+                py_mod.Py_DecRef(ps);
+                return try python.fromPy(result);
             }
             return .none;
         }

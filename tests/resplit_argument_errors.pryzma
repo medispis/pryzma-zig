@@ -1,0 +1,6 @@
+print resplit()
+print "after zero"
+print resplit("x")
+print "after one"
+print resplit("x", "axb", "ignored")
+print "after many"
