@@ -2154,7 +2154,9 @@ pub const Interpreter = struct {
             if (v == .string) return .{ .string = std.mem.trim(u8, v.string, " \t\r\n") };
         }
         if (std.mem.startsWith(u8, expr, "list(") and expr[expr.len - 1] == ')') {
-            const v = try self.evalExpr(expr[5 .. expr.len - 1]);
+            const argument = std.mem.trim(u8, expr[5 .. expr.len - 1], " \t\r\n");
+            if (argument.len == 0) return .{ .list = try List.create(self.allocator) };
+            const v = try self.evalExpr(argument);
             if (self.python) |python| {
                 const py_value = try python.toPy(v, false);
                 defer py_mod.Py_DecRef(py_value);
