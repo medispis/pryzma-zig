@@ -2596,7 +2596,17 @@ pub const Interpreter = struct {
             if (a.len >= 2) {
                 const prefix = try self.evalExpr(a[0]);
                 const text = try self.evalExpr(a[1]);
-                return .{ .boolean = prefix == .string and text == .string and std.mem.startsWith(u8, text.string, prefix.string) };
+                if (text != .string) {
+                    self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: '{s}' object has no attribute 'startswith'", .{ self.current_line, value.typeName(text) }));
+                    self.eval_error = true;
+                    return .none;
+                }
+                if (prefix != .string) {
+                    self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: startswith first arg must be str or a tuple of str, not {s}", .{ self.current_line, value.typeName(prefix) }));
+                    self.eval_error = true;
+                    return .none;
+                }
+                return .{ .boolean = std.mem.startsWith(u8, text.string, prefix.string) };
             }
         }
         if (std.mem.startsWith(u8, expr, "endswith(") and isWholeCall(expr, "endswith")) {

@@ -1,0 +1,4 @@
+Error at line 1: 'int' object has no attribute 'startswith'
+after receiverError at line 3: 'int' object has no attribute 'startswith'
+after textError at line 5: startswith first arg must be str or a tuple of str, not int
+after prefix

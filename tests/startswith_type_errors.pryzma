@@ -1,0 +1,6 @@
+print startswith(1, 2)
+print "after receiver"
+print startswith("x", 3)
+print "after text"
+print startswith(1, "abc")
+print "after prefix"
