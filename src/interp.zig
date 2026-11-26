@@ -660,6 +660,8 @@ pub const Interpreter = struct {
                 std.Io.Dir.cwd().deleteFile(self.io, path.string) catch |err| {
                     if (err == error.FileNotFound) {
                         self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: [Errno 2] No such file or directory: '{s}'", .{ self.current_line, path.string }));
+                    } else if (err == error.IsDir) {
+                        self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: [Errno 21] Is a directory: '{s}'", .{ self.current_line, path.string }));
                     } else {
                         self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: {s}", .{ self.current_line, @errorName(err) }));
                     }
