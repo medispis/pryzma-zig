@@ -2667,7 +2667,9 @@ pub const Interpreter = struct {
             return .none;
         }
         if (std.mem.startsWith(u8, expr, "int(") and expr[expr.len - 1] == ')') {
-            const v = try self.evalExpr(expr[4 .. expr.len - 1]);
+            const argument = std.mem.trim(u8, expr[4 .. expr.len - 1], " \t\r\n");
+            if (argument.len == 0) return .{ .int = 0 };
+            const v = try self.evalExpr(argument);
             if (self.python) |python| {
                 const py_value = try python.toPy(v, false);
                 defer py_mod.Py_DecRef(py_value);
