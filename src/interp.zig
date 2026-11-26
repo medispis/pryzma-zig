@@ -996,7 +996,10 @@ pub const Interpreter = struct {
 
     fn assertStatement(self: *Interpreter, text: []const u8) !void {
         const args = try self.splitArgs(std.mem.trim(u8, text, " \t"));
-        if (args.len < 2) return;
+        if (args.len < 2) {
+            self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: list index out of range", .{self.current_line}));
+            return;
+        }
         const condition = try self.evalExpr(args[0]);
         if (!value.truthy(condition)) {
             const message = try self.evalExpr(args[1]);
