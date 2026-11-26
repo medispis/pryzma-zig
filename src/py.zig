@@ -369,8 +369,11 @@ pub const Py = struct {
         \\def is_numeric(value):
         \\    return str(value).isnumeric()
         \\
-        \\def strip_text(value):
-        \\    return value.strip()
+        \\def strip_or_error(value):
+        \\    try:
+        \\        return value.strip()
+        \\    except Exception as error:
+        \\        return "__PRYZMA_STRIP_ERROR__:" + str(error)
         \\
         \\def text_length(value):
         \\    return len(value)

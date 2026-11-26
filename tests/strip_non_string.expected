@@ -1,0 +1,2 @@
+Error at line 1: 'int' object has no attribute 'strip'
+after

@@ -2120,16 +2120,20 @@ pub const Interpreter = struct {
         }
         if (std.mem.startsWith(u8, expr, "strip(") and expr[expr.len - 1] == ')') {
             const v = try self.evalExpr(expr[6 .. expr.len - 1]);
-            if (v == .string) {
-                if (self.python) |python| {
-                    const py_value = try python.newString(v.string);
-                    defer py_mod.Py_DecRef(py_value);
-                    const result = try python.callHelper("strip_text", &.{py_value});
-                    defer py_mod.Py_DecRef(result);
-                    return try python.fromPy(result);
+            if (self.python) |python| {
+                const py_value = try python.toPy(v, false);
+                defer py_mod.Py_DecRef(py_value);
+                const result = try python.callHelper("strip_or_error", &.{py_value});
+                defer py_mod.Py_DecRef(result);
+                const stripped = try python.fromPy(result);
+                if (stripped == .string and std.mem.startsWith(u8, stripped.string, "__PRYZMA_STRIP_ERROR__:")) {
+                    self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: {s}", .{ self.current_line, stripped.string["__PRYZMA_STRIP_ERROR__:".len..] }));
+                    self.eval_error = true;
+                    return .none;
                 }
-                return .{ .string = std.mem.trim(u8, v.string, " \t\r\n") };
+                return stripped;
             }
+            if (v == .string) return .{ .string = std.mem.trim(u8, v.string, " \t\r\n") };
         }
         if (std.mem.startsWith(u8, expr, "list(") and expr[expr.len - 1] == ')') {
             const v = try self.evalExpr(expr[5 .. expr.len - 1]);
