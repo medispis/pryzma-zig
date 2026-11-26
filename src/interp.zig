@@ -2307,7 +2307,13 @@ pub const Interpreter = struct {
             }
         }
         if (std.mem.startsWith(u8, expr, "dirname(") and isWholeCall(expr, "dirname")) {
-            const path = try self.evalExpr(expr[8 .. expr.len - 1]);
+            const argument = std.mem.trim(u8, expr[8 .. expr.len - 1], " \t\r\n");
+            if (argument.len == 0) {
+                self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: invalid syntax (<string>, line 0)", .{self.current_line}));
+                self.eval_error = true;
+                return .none;
+            }
+            const path = try self.evalExpr(argument);
             if (path == .string) {
                 if (std.mem.endsWith(u8, path.string, "/")) {
                     const trimmed = std.mem.trimEnd(u8, path.string, "/");
@@ -2318,7 +2324,13 @@ pub const Interpreter = struct {
             }
         }
         if (std.mem.startsWith(u8, expr, "basename(") and isWholeCall(expr, "basename")) {
-            const path = try self.evalExpr(expr[9 .. expr.len - 1]);
+            const argument = std.mem.trim(u8, expr[9 .. expr.len - 1], " \t\r\n");
+            if (argument.len == 0) {
+                self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: invalid syntax (<string>, line 0)", .{self.current_line}));
+                self.eval_error = true;
+                return .none;
+            }
+            const path = try self.evalExpr(argument);
             if (path == .string) {
                 if (path.string.len != 0 and std.fs.path.isSep(path.string[path.string.len - 1])) {
                     return .{ .string = "" };
@@ -2327,7 +2339,13 @@ pub const Interpreter = struct {
             }
         }
         if (std.mem.startsWith(u8, expr, "abs_path(") and isWholeCall(expr, "abs_path")) {
-            const path = try self.evalExpr(expr[9 .. expr.len - 1]);
+            const argument = std.mem.trim(u8, expr[9 .. expr.len - 1], " \t\r\n");
+            if (argument.len == 0) {
+                self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: invalid syntax (<string>, line 0)", .{self.current_line}));
+                self.eval_error = true;
+                return .none;
+            }
+            const path = try self.evalExpr(argument);
             if (path == .string) {
                 const cwd = try std.process.currentPathAlloc(self.io, self.allocator);
                 defer self.allocator.free(cwd);

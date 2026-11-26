@@ -1,0 +1,4 @@
+Error at line 1: invalid syntax (<string>, line 0)
+after basenameError at line 3: invalid syntax (<string>, line 0)
+after dirnameError at line 5: invalid syntax (<string>, line 0)
+after abs_path
