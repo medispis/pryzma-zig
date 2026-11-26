@@ -2618,6 +2618,11 @@ pub const Interpreter = struct {
             }
             const lo = value.asInt(try self.evalExpr(a[0])) orelse 0;
             const hi = value.asInt(try self.evalExpr(a[1])) orelse lo;
+            if (lo > hi) {
+                self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: empty range in randint({d}, {d})", .{ self.current_line, lo, hi }));
+                self.eval_error = true;
+                return .none;
+            }
             return .{ .int = lo + @mod(@as(i64, rand()), @max(hi - lo + 1, 1)) };
         }
         if (findTopLevel(expr, "{")) |brace| {

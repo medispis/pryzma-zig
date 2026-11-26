@@ -1,0 +1,2 @@
+print randint(5, 1)
+print "after"
