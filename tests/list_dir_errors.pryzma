@@ -1,0 +1,4 @@
+print list_dir("/definitely/missing-pryzma-dir")
+print "after"
+print list_dir("tests/dirname.pryzma")
+print "done"

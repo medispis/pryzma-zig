@@ -2263,7 +2263,21 @@ pub const Interpreter = struct {
         if (std.mem.startsWith(u8, expr, "list_dir(") and isWholeCall(expr, "list_dir")) {
             const path = try self.evalExpr(expr[9 .. expr.len - 1]);
             if (path == .string) {
-                const dir = std.Io.Dir.cwd().openDir(self.io, path.string, .{ .iterate = true }) catch return .none;
+                const dir = std.Io.Dir.cwd().openDir(self.io, path.string, .{ .iterate = true }) catch |err| {
+                    const message: ?[]const u8 = if (err == error.FileNotFound)
+                        "[Errno 2] No such file or directory"
+                    else if (err == error.NotDir)
+                        "[Errno 20] Not a directory"
+                    else
+                        null;
+                    if (message) |text| {
+                        self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: {s}: '{s}'", .{ self.current_line, text, path.string }));
+                    } else {
+                        self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: {s}", .{ self.current_line, @errorName(err) }));
+                    }
+                    self.eval_error = true;
+                    return .none;
+                };
                 defer dir.close(self.io);
                 var entries = dir.iterate();
                 const result = try value.List.create(self.allocator);
