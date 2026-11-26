@@ -1,0 +1,6 @@
+print ascii("é")
+print "|"
+print ascii("🙂")
+print "|"
+print ascii("ab")
+print "after"

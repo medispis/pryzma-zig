@@ -2467,11 +2467,19 @@ pub const Interpreter = struct {
         }
         if (std.mem.startsWith(u8, expr, "ascii(") and expr[expr.len - 1] == ')') {
             const v = try self.evalExpr(expr[6 .. expr.len - 1]);
-            if (v == .string and v.string.len > 0) {
+            if (v == .string) {
+                const count = try self.lengthOf(v);
+                if (count != 1) {
+                    self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: ord() expected a character, but string of length {d} found", .{ self.current_line, count }));
+                    self.eval_error = true;
+                    return .none;
+                }
                 const cp = std.unicode.utf8Decode(v.string) catch 0;
                 return .{ .int = @intCast(cp) };
             }
-            return .{ .int = 0 };
+            self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: ord() expected string of length 1, but {s} found", .{ self.current_line, value.typeName(v) }));
+            self.eval_error = true;
+            return .none;
         }
         if (std.mem.startsWith(u8, expr, "int(") and expr[expr.len - 1] == ')') {
             const v = try self.evalExpr(expr[4 .. expr.len - 1]);
