@@ -369,6 +369,9 @@ pub const Py = struct {
         \\def is_numeric(value):
         \\    return str(value).isnumeric()
         \\
+        \\def strip_text(value):
+        \\    return value.strip()
+        \\
         \\def randint(a, b):
         \\    return random.randint(a, b)
         \\
