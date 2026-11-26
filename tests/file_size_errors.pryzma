@@ -1,0 +1,4 @@
+print file_size("/definitely/missing-pryzma-file")
+print "after"
+print file_size("tests/dirname.pryzma/child")
+print "done"

@@ -2189,7 +2189,21 @@ pub const Interpreter = struct {
         if (std.mem.startsWith(u8, expr, "file_size(") and isWholeCall(expr, "file_size")) {
             const path = try self.evalExpr(expr[10 .. expr.len - 1]);
             if (path == .string) {
-                const stat = std.Io.Dir.cwd().statFile(self.io, path.string, .{}) catch return .none;
+                const stat = std.Io.Dir.cwd().statFile(self.io, path.string, .{}) catch |err| {
+                    const message: ?[]const u8 = if (err == error.FileNotFound)
+                        "[Errno 2] No such file or directory"
+                    else if (err == error.NotDir)
+                        "[Errno 20] Not a directory"
+                    else
+                        null;
+                    if (message) |text| {
+                        self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: {s}: '{s}'", .{ self.current_line, text, path.string }));
+                    } else {
+                        self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: {s}", .{ self.current_line, @errorName(err) }));
+                    }
+                    self.eval_error = true;
+                    return .none;
+                };
                 return .{ .int = @intCast(stat.size) };
             }
         }
