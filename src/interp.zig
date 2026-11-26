@@ -2314,6 +2314,11 @@ pub const Interpreter = struct {
                 return .none;
             }
             const path = try self.evalExpr(argument);
+            if (path != .string) {
+                self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: expected str, bytes or os.PathLike object, not {s}", .{ self.current_line, value.typeName(path) }));
+                self.eval_error = true;
+                return .none;
+            }
             if (path == .string) {
                 if (std.mem.endsWith(u8, path.string, "/")) {
                     const trimmed = std.mem.trimEnd(u8, path.string, "/");
@@ -2331,6 +2336,11 @@ pub const Interpreter = struct {
                 return .none;
             }
             const path = try self.evalExpr(argument);
+            if (path != .string) {
+                self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: expected str, bytes or os.PathLike object, not {s}", .{ self.current_line, value.typeName(path) }));
+                self.eval_error = true;
+                return .none;
+            }
             if (path == .string) {
                 if (path.string.len != 0 and std.fs.path.isSep(path.string[path.string.len - 1])) {
                     return .{ .string = "" };
@@ -2346,6 +2356,11 @@ pub const Interpreter = struct {
                 return .none;
             }
             const path = try self.evalExpr(argument);
+            if (path != .string) {
+                self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: expected str, bytes or os.PathLike object, not {s}", .{ self.current_line, value.typeName(path) }));
+                self.eval_error = true;
+                return .none;
+            }
             if (path == .string) {
                 const cwd = try std.process.currentPathAlloc(self.io, self.allocator);
                 defer self.allocator.free(cwd);

@@ -1,0 +1,6 @@
+print basename(3)
+print "after basename"
+print dirname(3)
+print "after dirname"
+print abs_path(3)
+print "after abs_path"
