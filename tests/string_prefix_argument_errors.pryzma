@@ -1,0 +1,8 @@
+print startswith()
+print "after zero"
+print startswith("a")
+print "after one"
+print startswith("a", "abc", "ignored")
+print "after extra"
+print endswith()
+print "after endswith"

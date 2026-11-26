@@ -1,0 +1,4 @@
+Error at line 1: list index out of range
+after zeroError at line 3: list index out of range
+after oneTrueafter extraError at line 7: list index out of range
+after endswith

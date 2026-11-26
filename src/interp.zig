@@ -2530,7 +2530,12 @@ pub const Interpreter = struct {
         }
         if (std.mem.startsWith(u8, expr, "startswith(") and expr[expr.len - 1] == ')') {
             const a = try self.splitArgs(expr[11 .. expr.len - 1]);
-            if (a.len == 2) {
+            if (a.len < 2) {
+                self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: list index out of range", .{self.current_line}));
+                self.eval_error = true;
+                return .none;
+            }
+            if (a.len >= 2) {
                 const prefix = try self.evalExpr(a[0]);
                 const text = try self.evalExpr(a[1]);
                 return .{ .boolean = prefix == .string and text == .string and std.mem.startsWith(u8, text.string, prefix.string) };
@@ -2538,7 +2543,12 @@ pub const Interpreter = struct {
         }
         if (std.mem.startsWith(u8, expr, "endswith(") and isWholeCall(expr, "endswith")) {
             const a = try self.splitArgs(expr[9 .. expr.len - 1]);
-            if (a.len == 2) {
+            if (a.len < 2) {
+                self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: list index out of range", .{self.current_line}));
+                self.eval_error = true;
+                return .none;
+            }
+            if (a.len >= 2) {
                 const suffix = try self.evalExpr(a[0]);
                 const text = try self.evalExpr(a[1]);
                 return .{ .boolean = suffix == .string and text == .string and std.mem.endsWith(u8, text.string, suffix.string) };
