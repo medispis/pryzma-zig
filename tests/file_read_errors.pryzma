@@ -1,0 +1,4 @@
+print file_read("tests")
+print "after"
+print file_read("tests/dirname.pryzma/child")
+print "done"

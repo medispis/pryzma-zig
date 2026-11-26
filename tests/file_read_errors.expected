@@ -1,0 +1,3 @@
+Error at line 1: [Errno 21] Is a directory: 'tests'
+afterError at line 3: [Errno 20] Not a directory: 'tests/dirname.pryzma/child'
+done
