@@ -44,6 +44,7 @@ pub fn main(init: std.process.Init.Minimal) !void {
         if (std.mem.eql(u8, arg, "-p")) interpreter.preprocess_only = true;
         if (std.mem.eql(u8, arg, "-np")) interpreter.no_preproc = true;
         if (std.mem.eql(u8, arg, "-fd")) interpreter.forward_declare = true;
+        if (std.mem.eql(u8, arg, "-upi")) interpreter.unpack_ = true;
         if (std.mem.eql(u8, arg, "-l")) line_mode = true;
         if (std.mem.eql(u8, arg, "-pk") or std.mem.eql(u8, arg, "-upk")) packed_mode = arg;
     }

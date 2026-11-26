@@ -359,9 +359,11 @@ pub const Interpreter = struct {
             self.printFmt("File '{s}' not found.\n", .{self.file_path});
             return;
         };
-        if (data.len >= 3 and std.mem.eql(u8, data[0..3], "prz")) {
+        const has_packed_prefix = data.len >= 3 and std.mem.eql(u8, data[0..3], "prz");
+        if (self.unpack_ or has_packed_prefix) {
             if (self.python) |python| {
-                const packed_bytes = try python.newBytes(data[3..]);
+                const compressed = if (has_packed_prefix) data[3..] else data;
+                const packed_bytes = try python.newBytes(compressed);
                 const unpacked_obj = try python.callHelper("lzma_decompress", &.{packed_bytes});
                 defer py_mod.Py_DecRef(unpacked_obj);
                 py_mod.Py_DecRef(packed_bytes);

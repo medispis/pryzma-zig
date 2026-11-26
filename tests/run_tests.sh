@@ -89,6 +89,17 @@ else
     printf '%s\n' "$walk_output"
     ((failed+=1))
 fi
+raw_packed="$mkdir_tmp/raw-packed.prz"
+python3 -c 'import lzma,sys; sys.stdout.buffer.write(lzma.compress(b"print \"raw unpack ok\"\n"))' >"$raw_packed"
+unpack_output="$("$bin" "$raw_packed" -upi 2>&1)"
+if [[ "$unpack_output" == "raw unpack ok" ]]; then
+    printf '[OK] CLI forced unpack without prefix\n'
+    ((passed+=1))
+else
+    printf '[FAIL] CLI forced unpack without prefix\n'
+    printf '%s\n' "$unpack_output"
+    ((failed+=1))
+fi
 rmdir_target="$mkdir_tmp/remove-me"
 rmdir_source="$mkdir_tmp/rmdir.pryzma"
 printf 'mkdir("%s")\nrmdir("%s")\n' "$rmdir_target" "$rmdir_target" >"$rmdir_source"
