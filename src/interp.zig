@@ -2462,10 +2462,11 @@ pub const Interpreter = struct {
         if (std.mem.startsWith(u8, expr, "join(") and isWholeCall(expr, "join")) {
             const args = try self.splitArgs(expr[5 .. expr.len - 1]);
             if (args.len != 2) {
-                const message = if (args.len < 2)
-                    try std.fmt.allocPrint(self.allocator, "Error at line {d}: not enough values to unpack (expected 2, got {d})", .{ self.current_line, args.len })
+                const count = if (args.len == 0) 1 else args.len;
+                const message = if (count < 2)
+                    try std.fmt.allocPrint(self.allocator, "Error at line {d}: not enough values to unpack (expected 2, got {d})", .{ self.current_line, count })
                 else
-                    try std.fmt.allocPrint(self.allocator, "Error at line {d}: too many values to unpack (expected 2, got {d})", .{ self.current_line, args.len });
+                    try std.fmt.allocPrint(self.allocator, "Error at line {d}: too many values to unpack (expected 2, got {d})", .{ self.current_line, count });
                 self.runtimeError(12, message);
                 self.eval_error = true;
                 return .none;
