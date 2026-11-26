@@ -658,7 +658,11 @@ pub const Interpreter = struct {
             const path = try self.evalExpr(line[7 .. line.len - 1]);
             if (path == .string) {
                 std.Io.Dir.cwd().deleteFile(self.io, path.string) catch |err| {
-                    self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: {s}", .{ self.current_line, @errorName(err) }));
+                    if (err == error.FileNotFound) {
+                        self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: [Errno 2] No such file or directory: '{s}'", .{ self.current_line, path.string }));
+                    } else {
+                        self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: {s}", .{ self.current_line, @errorName(err) }));
+                    }
                 };
             }
         } else if (std.mem.startsWith(u8, line, "remove_path(") and line[line.len - 1] == ')') {

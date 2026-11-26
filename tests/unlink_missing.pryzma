@@ -1,0 +1,2 @@
+unlink("/definitely/missing-pryzma-file")
+print "after"
