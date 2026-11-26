@@ -75,12 +75,13 @@ else
 fi
 walk_root="$mkdir_tmp/walk-root"
 mkdir -p "$walk_root/child"
+ln -s child "$walk_root/child-link"
 printf 'root\n' >"$walk_root/root.txt"
 printf 'child\n' >"$walk_root/child/child.txt"
 walk_program="$mkdir_tmp/walk.pryzma"
-printf 'rows = walk("%s")\nprint len(rows)\nprint rows[0][0]\n' "$walk_root" >"$walk_program"
+printf 'rows = walk("%s")\nprint len(rows)\nprint rows[0][0]\nprint in(rows[0][1], "child-link")\nprint in(rows[0][2], "child-link")\n' "$walk_root" >"$walk_program"
 walk_output="$("$bin" "$walk_program" 2>&1)"
-if [[ "$walk_output" == "2$walk_root" ]]; then
+if [[ "$walk_output" == "2${walk_root}TrueFalse" ]]; then
     printf '[OK] walk expression\n'
     ((passed+=1))
 else

@@ -2676,6 +2676,16 @@ pub const Interpreter = struct {
             if (entry.kind == .directory) {
                 try dirnames.append(.{ .string = name });
                 try child_names.append(self.allocator, name);
+            } else if (entry.kind == .sym_link) {
+                const entry_path = try std.fs.path.join(self.allocator, &.{ path, name });
+                const stat: ?std.Io.Dir.Stat = std.Io.Dir.cwd().statFile(self.io, entry_path, .{}) catch null;
+                if (stat) |metadata| {
+                    if (metadata.kind == .directory) {
+                        try dirnames.append(.{ .string = name });
+                        continue;
+                    }
+                }
+                try filenames.append(.{ .string = name });
             } else {
                 try filenames.append(.{ .string = name });
             }
