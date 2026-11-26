@@ -2483,6 +2483,20 @@ pub const Interpreter = struct {
         }
         if (std.mem.startsWith(u8, expr, "int(") and expr[expr.len - 1] == ')') {
             const v = try self.evalExpr(expr[4 .. expr.len - 1]);
+            if (self.python) |python| {
+                const py_value = try python.toPy(v, false);
+                defer py_mod.Py_DecRef(py_value);
+                const result = try python.callHelper("int_or_error", &.{py_value});
+                defer py_mod.Py_DecRef(result);
+                const converted = try python.fromPy(result);
+                if (converted == .string and std.mem.startsWith(u8, converted.string, "__PRYZMA_INT_ERROR__:")) {
+                    const message = converted.string["__PRYZMA_INT_ERROR__:".len..];
+                    self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: {s}", .{ self.current_line, message }));
+                    self.eval_error = true;
+                    return .none;
+                }
+                return converted;
+            }
             return .{ .int = value.asInt(v) orelse 0 };
         }
         if (std.mem.startsWith(u8, expr, "str(") and expr[expr.len - 1] == ')') {

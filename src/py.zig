@@ -375,6 +375,12 @@ pub const Py = struct {
         \\def text_length(value):
         \\    return len(value)
         \\
+        \\def int_or_error(value):
+        \\    try:
+        \\        return int(value)
+        \\    except Exception as error:
+        \\        return "__PRYZMA_INT_ERROR__:" + str(error)
+        \\
         \\def randint(a, b):
         \\    return random.randint(a, b)
         \\

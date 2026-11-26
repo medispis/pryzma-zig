@@ -1,0 +1,4 @@
+print int("1_000")
+print "|"
+print int("not a number")
+print "after"
