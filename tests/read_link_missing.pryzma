@@ -1,2 +1,4 @@
 print read_link("/definitely/missing-pryzma-link")
 print "after"
+print read_link("tests/dirname.pryzma")
+print "done"

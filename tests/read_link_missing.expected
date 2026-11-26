@@ -1,2 +1,3 @@
 Error at line 1: [Errno 2] No such file or directory: '/definitely/missing-pryzma-link'
-after
+afterError at line 3: [Errno 22] Invalid argument: 'tests/dirname.pryzma'
+done

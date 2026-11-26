@@ -2267,8 +2267,14 @@ pub const Interpreter = struct {
             if (path == .string) {
                 var buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
                 const len = std.Io.Dir.cwd().readLink(self.io, path.string, &buffer) catch |err| {
-                    if (err == error.FileNotFound) {
-                        self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: [Errno 2] No such file or directory: '{s}'", .{ self.current_line, path.string }));
+                    const os_error: ?[]const u8 = if (err == error.FileNotFound)
+                        "[Errno 2] No such file or directory"
+                    else if (err == error.NotLink)
+                        "[Errno 22] Invalid argument"
+                    else
+                        null;
+                    if (os_error) |message| {
+                        self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: {s}: '{s}'", .{ self.current_line, message, path.string }));
                         self.eval_error = true;
                         return .none;
                     }
