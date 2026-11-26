@@ -1,0 +1,2 @@
+print type(argv)
+print argv[0] == "tests/argv_context.pryzma"

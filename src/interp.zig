@@ -349,7 +349,7 @@ pub const Interpreter = struct {
         var argv_list = try self.allocator.create(List);
         argv_list.* = List.init(self.allocator);
         for (args) |arg| try argv_list.append(.{ .string = try self.dup(arg) });
-        try self.setVar("argv", .{ .list = argv_list });
+        try self.setVar("argv", .{ .tuple = argv_list });
         const cwd = try std.process.currentPathAlloc(self.io, self.allocator);
         defer self.allocator.free(cwd);
         const absolute_file = try std.fs.path.resolveAlloc(self.allocator, &.{ cwd, self.file_path });
