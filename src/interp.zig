@@ -2137,7 +2137,13 @@ pub const Interpreter = struct {
             }
         }
         if (std.mem.startsWith(u8, expr, "strip(") and expr[expr.len - 1] == ')') {
-            const v = try self.evalExpr(expr[6 .. expr.len - 1]);
+            const argument = std.mem.trim(u8, expr[6 .. expr.len - 1], " \t\r\n");
+            if (argument.len == 0) {
+                self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: invalid syntax (<string>, line 0)", .{self.current_line}));
+                self.eval_error = true;
+                return .none;
+            }
+            const v = try self.evalExpr(argument);
             if (self.python) |python| {
                 const py_value = try python.toPy(v, false);
                 defer py_mod.Py_DecRef(py_value);
