@@ -2183,7 +2183,7 @@ pub const Interpreter = struct {
             if (path == .string) {
                 if (std.mem.endsWith(u8, path.string, "/")) {
                     const trimmed = std.mem.trimEnd(u8, path.string, "/");
-                    if (trimmed.len == 0) return .{ .string = "/" };
+                    if (trimmed.len == 0) return .{ .string = path.string };
                     return .{ .string = trimmed };
                 }
                 return .{ .string = std.fs.path.dirname(path.string) orelse "" };
