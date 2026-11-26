@@ -350,7 +350,10 @@ pub const Interpreter = struct {
         argv_list.* = List.init(self.allocator);
         for (args) |arg| try argv_list.append(.{ .string = try self.dup(arg) });
         try self.setVar("argv", .{ .list = argv_list });
-        try self.setVar("__file__", .{ .string = try self.dup(self.file_path) });
+        const cwd = try std.process.currentPathAlloc(self.io, self.allocator);
+        defer self.allocator.free(cwd);
+        const absolute_file = try std.fs.path.resolveAlloc(self.allocator, &.{ cwd, self.file_path });
+        try self.setVar("__file__", .{ .string = try self.dup(absolute_file) });
 
         const data = std.Io.Dir.cwd().readFileAlloc(self.io, self.file_path, self.allocator, .limited(64 * 1024 * 1024)) catch {
             self.printFmt("File '{s}' not found.\n", .{self.file_path});
