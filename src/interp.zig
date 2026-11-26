@@ -2157,7 +2157,11 @@ pub const Interpreter = struct {
         if (std.mem.startsWith(u8, expr, "file_read(") and expr[expr.len - 1] == ')') {
             const path = try self.evalExpr(expr[10 .. expr.len - 1]);
             if (path == .string) {
-                const data = std.Io.Dir.cwd().readFileAlloc(self.io, path.string, self.allocator, .limited(64 * 1024 * 1024)) catch return .{ .string = "" };
+                const data = std.Io.Dir.cwd().readFileAlloc(self.io, path.string, self.allocator, .limited(64 * 1024 * 1024)) catch {
+                    self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: File '{s}' not found.", .{ self.current_line, path.string }));
+                    self.eval_error = true;
+                    return .none;
+                };
                 return .{ .string = data };
             }
         }
