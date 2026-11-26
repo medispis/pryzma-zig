@@ -1,4 +1,6 @@
 Error at line 1: chr() arg not in range(0x110000)
 afterError at line 3: chr() arg not in range(0x110000)
 doneError at line 5: 'utf-8' codec can't encode character '\ud800' in position 0: surrogates not allowed
-surrogate done
+surrogate doneError at line 7: 'str' object cannot be interpreted as an integer
+string doneError at line 9: 'float' object cannot be interpreted as an integer
+float done

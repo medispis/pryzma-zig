@@ -4,3 +4,7 @@ print char(1114112)
 print "done"
 print char(55296)
 print "surrogate done"
+print char("65")
+print "string done"
+print char(65.2)
+print "float done"

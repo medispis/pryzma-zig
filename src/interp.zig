@@ -2461,10 +2461,29 @@ pub const Interpreter = struct {
         }
         if (std.mem.startsWith(u8, expr, "char(") and isWholeCall(expr, "char")) {
             const v = try self.evalExpr(expr[5 .. expr.len - 1]);
-            const codepoint = value.asInt(v) orelse {
-                self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: 'str' object cannot be interpreted as an integer", .{self.current_line}));
-                self.eval_error = true;
-                return .none;
+            const codepoint: i64 = switch (v) {
+                .int => |n| n,
+                .boolean => |b| if (b) 1 else 0,
+                else => {
+                    const type_name: []const u8 = switch (v) {
+                        .string => "str",
+                        .float => "float",
+                        .none => "NoneType",
+                        .list => "list",
+                        .tuple => "tuple",
+                        .dict => "dict",
+                        .func_ref => "FuncReference",
+                        .extern_fn => "ExternFunction",
+                        .py_object => "object",
+                        .reference => "Reference",
+                        .lazy => "object",
+                        .isolate => "object",
+                        .int, .boolean => unreachable,
+                    };
+                    self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: '{s}' object cannot be interpreted as an integer", .{ self.current_line, type_name }));
+                    self.eval_error = true;
+                    return .none;
+                },
             };
             if (codepoint < 0 or codepoint > 0x10ffff) {
                 self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: chr() arg not in range(0x110000)", .{self.current_line}));
