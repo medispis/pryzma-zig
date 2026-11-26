@@ -2073,6 +2073,11 @@ pub const Interpreter = struct {
                 const sep = try self.evalExpr(a[0]);
                 const src = try self.evalExpr(a[1]);
                 if (sep == .string and src == .string) {
+                    if (sep.string.len == 0) {
+                        self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: empty separator", .{self.current_line}));
+                        self.eval_error = true;
+                        return .none;
+                    }
                     const result = try List.create(self.allocator);
                     const maxsplit = if (a.len >= 3) value.asInt(try self.evalExpr(a[2])) orelse -1 else -1;
                     var start: usize = 0;
