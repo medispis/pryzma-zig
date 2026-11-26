@@ -1,0 +1,6 @@
+print splitby(1, "abc")
+print "after separator"
+print splitby(",", 3)
+print "after source"
+print splitby(None, " a  b ")
+print splitby(",", "a,b", 1, 99)

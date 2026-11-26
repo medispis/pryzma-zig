@@ -366,6 +366,9 @@ pub const Py = struct {
         \\def split_lines(text):
         \\    return text.splitlines()
         \\
+        \\def split_whitespace(text):
+        \\    return text.split()
+        \\
         \\def now_datetime():
         \\    return datetime.datetime.now()
         \\

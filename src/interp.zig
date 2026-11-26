@@ -2115,27 +2115,43 @@ pub const Interpreter = struct {
             if (a.len >= 2) {
                 const sep = try self.evalExpr(a[0]);
                 const src = try self.evalExpr(a[1]);
-                if (sep == .string and src == .string) {
-                    if (sep.string.len == 0) {
-                        self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: empty separator", .{self.current_line}));
-                        self.eval_error = true;
-                        return .none;
-                    }
-                    const result = try List.create(self.allocator);
-                    const maxsplit = if (a.len >= 3) value.asInt(try self.evalExpr(a[2])) orelse -1 else -1;
-                    var start: usize = 0;
-                    var splits: i64 = 0;
-                    while (std.mem.indexOf(u8, src.string[start..], sep.string)) |relative| {
-                        if (maxsplit >= 0 and splits >= maxsplit) break;
-                        const pos = start + relative;
-                        try result.append(.{ .string = src.string[start..pos] });
-                        start = pos + sep.string.len;
-                        splits += 1;
-                        if (sep.string.len == 0) break;
-                    }
-                    try result.append(.{ .string = src.string[start..] });
-                    return .{ .list = result };
+                if (src != .string) {
+                    self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: '{s}' object has no attribute 'split'", .{ self.current_line, value.typeName(src) }));
+                    self.eval_error = true;
+                    return .none;
                 }
+                if (sep == .none) {
+                    const python = self.python orelse return .none;
+                    const py_src = try python.newString(src.string);
+                    defer py_mod.Py_DecRef(py_src);
+                    const result = try python.callHelper("split_whitespace", &.{py_src});
+                    defer py_mod.Py_DecRef(result);
+                    return try python.fromPy(result);
+                }
+                if (sep != .string) {
+                    self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: must be str or None, not {s}", .{ self.current_line, value.typeName(sep) }));
+                    self.eval_error = true;
+                    return .none;
+                }
+                if (sep.string.len == 0) {
+                    self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: empty separator", .{self.current_line}));
+                    self.eval_error = true;
+                    return .none;
+                }
+                const result = try List.create(self.allocator);
+                const maxsplit = if (a.len == 3) value.asInt(try self.evalExpr(a[2])) orelse -1 else -1;
+                var start: usize = 0;
+                var splits: i64 = 0;
+                while (std.mem.indexOf(u8, src.string[start..], sep.string)) |relative| {
+                    if (maxsplit >= 0 and splits >= maxsplit) break;
+                    const pos = start + relative;
+                    try result.append(.{ .string = src.string[start..pos] });
+                    start = pos + sep.string.len;
+                    splits += 1;
+                    if (sep.string.len == 0) break;
+                }
+                try result.append(.{ .string = src.string[start..] });
+                return .{ .list = result };
             }
         }
         if (std.mem.startsWith(u8, expr, "all(") and expr[expr.len - 1] == ')') {
