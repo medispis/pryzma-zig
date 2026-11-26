@@ -2666,7 +2666,7 @@ pub const Interpreter = struct {
     }
 
     fn walkDirectory(self: *Interpreter, path: []const u8, result: *value.List) !void {
-        const dir = try std.Io.Dir.cwd().openDir(self.io, path, .{ .iterate = true });
+        const dir = std.Io.Dir.cwd().openDir(self.io, path, .{ .iterate = true }) catch return;
         defer dir.close(self.io);
 
         const dirnames = try value.List.create(self.allocator);

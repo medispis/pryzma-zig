@@ -89,6 +89,17 @@ else
     printf '%s\n' "$walk_output"
     ((failed+=1))
 fi
+missing_walk_program="$mkdir_tmp/walk-missing.pryzma"
+printf 'rows = walk(\"%s/missing\")\nprint len(rows)\n' "$mkdir_tmp" >"$missing_walk_program"
+missing_walk_output="$("$bin" "$missing_walk_program" 2>&1)"
+if [[ "$missing_walk_output" == "0" ]]; then
+    printf '[OK] walk missing root\n'
+    ((passed+=1))
+else
+    printf '[FAIL] walk missing root\n'
+    printf '%s\n' "$missing_walk_output"
+    ((failed+=1))
+fi
 raw_packed="$mkdir_tmp/raw-packed.prz"
 python3 -c 'import lzma,sys; sys.stdout.buffer.write(lzma.compress(b"print \"raw unpack ok\"\n"))' >"$raw_packed"
 unpack_output="$("$bin" "$raw_packed" -upi 2>&1)"
