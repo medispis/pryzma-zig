@@ -1,0 +1,8 @@
+s = "é🙂"
+print s[0]
+print "|"
+print s[1]
+print "|"
+print s[-1]
+print "|"
+print s[0:2]

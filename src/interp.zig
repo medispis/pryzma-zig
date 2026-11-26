@@ -2682,12 +2682,8 @@ pub const Interpreter = struct {
         const step_text = if (second) |p| std.mem.trim(u8, slice[p + 1 ..], " \t") else "";
         const step = if (step_text.len == 0) 1 else value.asInt(try self.evalExpr(step_text)) orelse 1;
         if (step == 0) return .none;
-        const length: i64 = switch (obj) {
-            .string => |s| @intCast(s.len),
-            .list => |l| @intCast(l.len()),
-            .tuple => |l| @intCast(l.len()),
-            else => return .none,
-        };
+        if (obj != .string and obj != .list and obj != .tuple) return .none;
+        const length: i64 = @intCast(try self.lengthOf(obj));
         var start: i64 = if (start_text.len == 0) (if (step > 0) 0 else length - 1) else value.asInt(try self.evalExpr(start_text)) orelse 0;
         var stop: i64 = if (stop_text.len == 0) (if (step > 0) length else -1) else value.asInt(try self.evalExpr(stop_text)) orelse length;
         if (start < 0) start += length;
@@ -2703,7 +2699,11 @@ pub const Interpreter = struct {
             var output: std.Io.Writer.Allocating = .init(self.allocator);
             var i = start;
             while (if (step > 0) i < stop else i > stop) : (i += step) {
-                if (i >= 0 and i < length) try output.writer.writeByte(obj.string[@intCast(i)]);
+                if (i >= 0 and i < length) {
+                    const byte_start = stringByteOffset(obj.string, @intCast(i));
+                    const byte_end = stringByteOffset(obj.string, @intCast(i + 1));
+                    try output.writer.writeAll(obj.string[byte_start..byte_end]);
+                }
             }
             return .{ .string = try output.toOwnedSlice() };
         }
@@ -2714,6 +2714,16 @@ pub const Interpreter = struct {
             if (source.get(i)) |item| try result.append(item);
         }
         return if (obj == .list) .{ .list = result } else .{ .tuple = result };
+    }
+
+    fn stringByteOffset(text: []const u8, codepoint_index: usize) usize {
+        var byte_offset: usize = 0;
+        var count: usize = 0;
+        while (byte_offset < text.len and count < codepoint_index) : (count += 1) {
+            const width = std.unicode.utf8ByteSequenceLength(text[byte_offset]) catch 1;
+            byte_offset = @min(byte_offset + width, text.len);
+        }
+        return byte_offset;
     }
 
     fn walkDirectory(self: *Interpreter, path: []const u8, result: *value.List) !void {
@@ -2830,9 +2840,13 @@ pub const Interpreter = struct {
             },
             .string => |s| {
                 if (value.asInt(idx)) |i| {
-                    const n: i64 = @intCast(s.len);
+                    const n: i64 = @intCast(try self.lengthOf(.{ .string = s }));
                     const j = if (i < 0) i + n else i;
-                    if (j >= 0 and j < n) return .{ .string = try self.dup(s[@intCast(j)..@intCast(j + 1)]) };
+                    if (j >= 0 and j < n) {
+                        const start = stringByteOffset(s, @intCast(j));
+                        const end = stringByteOffset(s, @intCast(j + 1));
+                        return .{ .string = try self.dup(s[start..end]) };
+                    }
                 }
                 return .none;
             },
