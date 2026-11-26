@@ -2461,8 +2461,23 @@ pub const Interpreter = struct {
         }
         if (std.mem.startsWith(u8, expr, "char(") and isWholeCall(expr, "char")) {
             const v = try self.evalExpr(expr[5 .. expr.len - 1]);
+            const codepoint = value.asInt(v) orelse {
+                self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: 'str' object cannot be interpreted as an integer", .{self.current_line}));
+                self.eval_error = true;
+                return .none;
+            };
+            if (codepoint < 0 or codepoint > 0x10ffff) {
+                self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: chr() arg not in range(0x110000)", .{self.current_line}));
+                self.eval_error = true;
+                return .none;
+            }
+            if (codepoint >= 0xd800 and codepoint <= 0xdfff) {
+                self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: 'utf-8' codec can't encode character '\\u{x}' in position 0: surrogates not allowed", .{ self.current_line, codepoint }));
+                self.eval_error = true;
+                return .none;
+            }
             var buf: [4]u8 = undefined;
-            const n = std.unicode.utf8Encode(@intCast(value.asInt(v) orelse 0), &buf) catch return .none;
+            const n = std.unicode.utf8Encode(@intCast(codepoint), &buf) catch return .none;
             return .{ .string = try self.dup(buf[0..n]) };
         }
         if (std.mem.startsWith(u8, expr, "ascii(") and expr[expr.len - 1] == ')') {

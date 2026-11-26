@@ -1,0 +1,6 @@
+print char(-1)
+print "after"
+print char(1114112)
+print "done"
+print char(55296)
+print "surrogate done"
