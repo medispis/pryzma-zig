@@ -1,0 +1,9 @@
+print all()
+print "after empty"
+print all(missing)
+print "after missing"
+number = 1
+print all(number)
+print "after scalar"
+items = [1, "x", True]
+print all(items)

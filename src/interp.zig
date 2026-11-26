@@ -2120,8 +2120,12 @@ pub const Interpreter = struct {
             }
         }
         if (std.mem.startsWith(u8, expr, "all(") and expr[expr.len - 1] == ')') {
-            const v = try self.evalExpr(expr[4 .. expr.len - 1]);
-            if (v == .list) {
+            const list_name = std.mem.trim(u8, expr[4 .. expr.len - 1], " \t\r\n");
+            if (self.lookupVar(list_name)) |v| {
+                if (v != .list) {
+                    self.runtimeError(27, try std.fmt.allocPrint(self.allocator, "Error at line {d}: List '{s}' is not defined.", .{ self.current_line, list_name }));
+                    return .none;
+                }
                 var aw: std.Io.Writer.Allocating = .init(self.allocator);
                 for (v.list.items.items) |item| {
                     const s = try value.printString(self.allocator, item);
@@ -2129,6 +2133,8 @@ pub const Interpreter = struct {
                 }
                 return .{ .string = try aw.toOwnedSlice() };
             }
+            self.runtimeError(27, try std.fmt.allocPrint(self.allocator, "Error at line {d}: List '{s}' is not defined.", .{ self.current_line, list_name }));
+            return .none;
         }
         if (std.mem.startsWith(u8, expr, "defined(") and expr[expr.len - 1] == ')') {
             const name = std.mem.trim(u8, expr[8 .. expr.len - 1], " \t\"'");

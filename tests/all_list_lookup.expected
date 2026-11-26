@@ -1,0 +1,4 @@
+Error at line 1: List '' is not defined.
+Noneafter emptyError at line 3: List 'missing' is not defined.
+Noneafter missingError at line 6: List 'number' is not defined.
+Noneafter scalar1xTrue
