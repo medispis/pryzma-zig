@@ -2380,12 +2380,20 @@ pub const Interpreter = struct {
         }
         if (std.mem.startsWith(u8, expr, "isanumber(") and isWholeCall(expr, "isanumber")) {
             const v = try self.evalExpr(expr[10 .. expr.len - 1]);
+            if (self.python) |python| {
+                const py_value = try python.toPy(v, false);
+                defer py_mod.Py_DecRef(py_value);
+                const result = try python.callHelper("is_numeric", &.{py_value});
+                defer py_mod.Py_DecRef(result);
+                return try python.fromPy(result);
+            }
+            if (v == .int) return .{ .boolean = v.int >= 0 };
             if (v == .string) {
                 if (v.string.len == 0) return .{ .boolean = false };
                 for (v.string) |c| if (!std.ascii.isDigit(c)) return .{ .boolean = false };
                 return .{ .boolean = true };
             }
-            return .{ .boolean = value.isNumber(v) };
+            return .{ .boolean = false };
         }
         if (std.mem.startsWith(u8, expr, "randint(") and expr[expr.len - 1] == ')') {
             const a = try self.splitArgs(expr[8 .. expr.len - 1]);

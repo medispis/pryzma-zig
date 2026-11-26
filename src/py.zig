@@ -366,6 +366,9 @@ pub const Py = struct {
         \\def type_name(value):
         \\    return type(value).__name__
         \\
+        \\def is_numeric(value):
+        \\    return str(value).isnumeric()
+        \\
         \\def randint(a, b):
         \\    return random.randint(a, b)
         \\

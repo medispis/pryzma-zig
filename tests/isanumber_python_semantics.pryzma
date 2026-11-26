@@ -1,0 +1,4 @@
+print isanumber(-12)
+print isanumber(1.5)
+print isanumber("12")
+print isanumber("²")
