@@ -2458,7 +2458,13 @@ pub const Interpreter = struct {
             return .none;
         }
         if (std.mem.startsWith(u8, expr, "is_func(") and isWholeCall(expr, "is_func")) {
-            const candidate = try self.evalExpr(expr[8 .. expr.len - 1]);
+            const argument = std.mem.trim(u8, expr[8 .. expr.len - 1], " \t\r\n");
+            if (argument.len == 0) {
+                self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: invalid syntax (<string>, line 0)", .{self.current_line}));
+                self.eval_error = true;
+                return .none;
+            }
+            const candidate = try self.evalExpr(argument);
             return .{ .boolean = switch (candidate) {
                 .func_ref => true,
                 .string => |name| self.functions.contains(name),
