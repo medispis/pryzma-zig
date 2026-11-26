@@ -604,7 +604,19 @@ pub const Interpreter = struct {
             const path = try self.evalExpr(line[6 .. line.len - 1]);
             if (path == .string) {
                 std.Io.Dir.cwd().deleteDir(self.io, path.string) catch |err| {
-                    self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: {s}", .{ self.current_line, @errorName(err) }));
+                    const message: ?[]const u8 = if (err == error.FileNotFound)
+                        "[Errno 2] No such file or directory"
+                    else if (err == error.NotDir)
+                        "[Errno 20] Not a directory"
+                    else if (err == error.DirNotEmpty)
+                        "[Errno 39] Directory not empty"
+                    else
+                        null;
+                    if (message) |text| {
+                        self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: {s}: '{s}'", .{ self.current_line, text, path.string }));
+                    } else {
+                        self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: {s}", .{ self.current_line, @errorName(err) }));
+                    }
                 };
             }
         } else if (std.mem.startsWith(u8, line, "removedirs(") and line[line.len - 1] == ')') {

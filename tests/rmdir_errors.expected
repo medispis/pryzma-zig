@@ -1,0 +1,3 @@
+Error at line 1: [Errno 2] No such file or directory: '/definitely/missing-pryzma-dir'
+afterError at line 3: [Errno 39] Directory not empty: 'tests'
+done

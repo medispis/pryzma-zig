@@ -1,0 +1,4 @@
+rmdir("/definitely/missing-pryzma-dir")
+print "after"
+rmdir("tests")
+print "done"
