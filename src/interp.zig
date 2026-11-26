@@ -489,9 +489,9 @@ pub const Interpreter = struct {
         } else if (std.mem.startsWith(u8, line, "extern ")) {
             try self.bindExtern(line);
         } else if (std.mem.startsWith(u8, line, "use ")) {
-            try self.importFunctions(std.mem.trim(u8, line[4..], " \t"));
+            try self.importWithDirectives(std.mem.trim(u8, line[4..], " \t"), false);
         } else if (std.mem.startsWith(u8, line, "from ")) {
-            try self.importSelectedFunctions(std.mem.trim(u8, line[5..], " \t"));
+            try self.importWithDirectives(std.mem.trim(u8, line[5..], " \t"), true);
         } else if (std.mem.startsWith(u8, line, "load(") and line[line.len - 1] == ')') {
             try self.loadPythonModule(line[5 .. line.len - 1]);
         } else if (std.mem.startsWith(u8, line, "call(") and line[line.len - 1] == ')') {
@@ -1246,11 +1246,57 @@ pub const Interpreter = struct {
         try self.loadPryzmaFunctions(source, name);
     }
 
+    fn importWithDirectives(self: *Interpreter, spec_in: []const u8, selected: bool) !void {
+        const directive_pos = std.mem.indexOf(u8, spec_in, " with ") orelse {
+            if (selected) {
+                try self.importSelectedFunctions(spec_in);
+            } else {
+                try self.importFunctions(spec_in);
+            }
+            return;
+        };
+
+        const import_spec = std.mem.trim(u8, spec_in[0..directive_pos], " \t");
+        var directive_text = std.mem.trim(u8, spec_in[directive_pos + 6 ..], " \t");
+        if (std.mem.startsWith(u8, directive_text, "{") and std.mem.endsWith(u8, directive_text, "}")) {
+            directive_text = directive_text[1 .. directive_text.len - 1];
+        }
+
+        const old_nan = self.nan;
+        const old_forward_declare = self.forward_declare;
+        const old_no_preproc = self.no_preproc;
+        defer {
+            self.nan = old_nan;
+            self.forward_declare = old_forward_declare;
+            self.no_preproc = old_no_preproc;
+        }
+
+        const directives = try self.splitArgs(directive_text);
+        for (directives) |raw| self.applyDirective(std.mem.trim(u8, raw, " \t"));
+
+        if (selected) {
+            try self.importSelectedFunctions(import_spec);
+        } else {
+            try self.importFunctions(import_spec);
+        }
+    }
+
     fn importSelectedFunctions(self: *Interpreter, spec: []const u8) !void {
         const use_pos = std.mem.indexOf(u8, spec, " use ") orelse return;
         var module = std.mem.trim(u8, spec[0..use_pos], " \t");
         const path: QuotedWord = parseQuotedOrWord(module) orelse .{ .value = module, .end = module.len };
         module = path.value;
+        if (!std.mem.containsAtLeast(u8, module, 1, "/") and !std.mem.containsAtLeast(u8, module, 1, "\\")) {
+            const root = std.fs.path.dirname(self.file_path) orelse ".";
+            if (std.mem.indexOf(u8, module, "::")) |separator| {
+                const folder = try std.mem.replaceOwned(u8, self.allocator, module[0..separator], "::", "/");
+                const package_file = try std.fmt.allocPrint(self.allocator, "{s}.pryzma", .{module[separator + 2 ..]});
+                module = try std.fs.path.join(self.allocator, &.{ root, "packages", folder, package_file });
+            } else {
+                const package_file = try std.fmt.allocPrint(self.allocator, "{s}.pryzma", .{module});
+                module = try std.fs.path.join(self.allocator, &.{ root, "packages", module, package_file });
+            }
+        }
         var functions_text = std.mem.trim(u8, spec[use_pos + 5 ..], " \t");
         if (std.mem.startsWith(u8, functions_text, "{") and std.mem.endsWith(u8, functions_text, "}")) {
             functions_text = functions_text[1 .. functions_text.len - 1];

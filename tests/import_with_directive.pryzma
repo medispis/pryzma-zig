@@ -1,0 +1,6 @@
+from "tests/with_directive_module.pryzma" use early with {rs}
+result = @early
+print result
+use "tests/with_directive_module.pryzma" with {rs}
+module_result = @with_directive_module.early
+print module_result
