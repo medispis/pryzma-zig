@@ -2568,7 +2568,13 @@ pub const Interpreter = struct {
             return .{ .boolean = false };
         }
         if (std.mem.startsWith(u8, expr, "randint(") and expr[expr.len - 1] == ')') {
-            const a = try self.splitArgs(expr[8 .. expr.len - 1]);
+            const argument = std.mem.trim(u8, expr[8 .. expr.len - 1], " \t\r\n");
+            if (argument.len == 0) {
+                self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: invalid syntax (<string>, line 0)", .{self.current_line}));
+                self.eval_error = true;
+                return .none;
+            }
+            const a = try self.splitArgs(argument);
             if (a.len == 2) {
                 const lo = value.asInt(try self.evalExpr(a[0])) orelse 0;
                 const hi = value.asInt(try self.evalExpr(a[1])) orelse lo;
