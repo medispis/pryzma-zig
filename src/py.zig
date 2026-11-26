@@ -378,6 +378,12 @@ pub const Py = struct {
         \\def text_length(value):
         \\    return len(value)
         \\
+        \\def length_or_error(value):
+        \\    try:
+        \\        return len(value)
+        \\    except Exception as error:
+        \\        return "__PRYZMA_LEN_ERROR__:" + str(error)
+        \\
         \\def int_or_error(value):
         \\    try:
         \\        return int(value)

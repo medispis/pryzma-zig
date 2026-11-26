@@ -2451,6 +2451,19 @@ pub const Interpreter = struct {
         }
         if (std.mem.startsWith(u8, expr, "len(") and expr[expr.len - 1] == ')') {
             const v = try self.evalExpr(expr[4 .. expr.len - 1]);
+            if (self.python) |python| {
+                const py_value = try python.toPy(v, false);
+                defer py_mod.Py_DecRef(py_value);
+                const result = try python.callHelper("length_or_error", &.{py_value});
+                defer py_mod.Py_DecRef(result);
+                const length = try python.fromPy(result);
+                if (length == .string and std.mem.startsWith(u8, length.string, "__PRYZMA_LEN_ERROR__:")) {
+                    self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: {s}", .{ self.current_line, length.string["__PRYZMA_LEN_ERROR__:".len..] }));
+                    self.eval_error = true;
+                    return .none;
+                }
+                return length;
+            }
             return .{ .int = @intCast(try self.lengthOf(v)) };
         }
         if (std.mem.startsWith(u8, expr, "type(") and expr[expr.len - 1] == ')') {
