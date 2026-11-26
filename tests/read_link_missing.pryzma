@@ -1,0 +1,2 @@
+print read_link("/definitely/missing-pryzma-link")
+print "after"

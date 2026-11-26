@@ -40,6 +40,7 @@ pub const Interpreter = struct {
     custom_handlers: std.StringHashMap(*anyopaque) = undefined,
 
     err: i64 = 0,
+    eval_error: bool = false,
     in_try_block: bool = false,
     in_func: std.ArrayList(bool) = .empty,
     function_tracker: std.ArrayList(?[]const u8) = .empty,
@@ -1871,8 +1872,9 @@ pub const Interpreter = struct {
         for (parts) |part| {
             const p = std.mem.trim(u8, part, " \t");
             if (p.len == 0) continue;
+            self.eval_error = false;
             const v = try self.evalExpr(p);
-            if (self.in_try_block and v == .none) continue;
+            if (self.eval_error or (self.in_try_block and v == .none)) continue;
             const s = try value.printString(self.allocator, v);
             const replaced = try std.mem.replaceOwned(u8, self.allocator, s, "\\n", "\n");
             self.out(replaced);
@@ -2259,7 +2261,14 @@ pub const Interpreter = struct {
             const path = try self.evalExpr(expr[10 .. expr.len - 1]);
             if (path == .string) {
                 var buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
-                const len = try std.Io.Dir.cwd().readLink(self.io, path.string, &buffer);
+                const len = std.Io.Dir.cwd().readLink(self.io, path.string, &buffer) catch |err| {
+                    if (err == error.FileNotFound) {
+                        self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: [Errno 2] No such file or directory: '{s}'", .{ self.current_line, path.string }));
+                        self.eval_error = true;
+                        return .none;
+                    }
+                    return err;
+                };
                 return .{ .string = try self.dup(buffer[0..len]) };
             }
         }
