@@ -2402,7 +2402,11 @@ pub const Interpreter = struct {
             }
             const separator = try self.evalExpr(args[0]);
             const sequence = try self.evalExpr(args[1]);
-            if (separator != .string) return .none;
+            if (separator != .string) {
+                self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: '{s}' object has no attribute 'join'", .{ self.current_line, value.typeName(separator) }));
+                self.eval_error = true;
+                return .none;
+            }
 
             var output: std.Io.Writer.Allocating = .init(self.allocator);
             var first = true;
@@ -2424,12 +2428,20 @@ pub const Interpreter = struct {
                     }
                 },
                 .list, .tuple => |items| {
-                    for (items.items.items) |item| {
-                        if (item != .string) return .none;
+                    for (items.items.items, 0..) |item, index| {
+                        if (item != .string) {
+                            self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: sequence item {d}: expected str instance, {s} found", .{ self.current_line, index, value.typeName(item) }));
+                            self.eval_error = true;
+                            return .none;
+                        }
                         try appendItem(&output.writer, separator.string, &first, item.string);
                     }
                 },
-                else => return .none,
+                else => {
+                    self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: can only join an iterable", .{self.current_line}));
+                    self.eval_error = true;
+                    return .none;
+                },
             }
             return .{ .string = try output.toOwnedSlice() };
         }
