@@ -1,0 +1,4 @@
+print ascii()
+print "ascii after"
+print char()
+print "char after"

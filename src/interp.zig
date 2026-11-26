@@ -2623,7 +2623,13 @@ pub const Interpreter = struct {
             return .{ .string = value.typeName(v) };
         }
         if (std.mem.startsWith(u8, expr, "char(") and isWholeCall(expr, "char")) {
-            const v = try self.evalExpr(expr[5 .. expr.len - 1]);
+            const argument = std.mem.trim(u8, expr[5 .. expr.len - 1], " \t\r\n");
+            if (argument.len == 0) {
+                self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: invalid syntax (<string>, line 0)", .{self.current_line}));
+                self.eval_error = true;
+                return .none;
+            }
+            const v = try self.evalExpr(argument);
             const codepoint: i64 = switch (v) {
                 .int => |n| n,
                 .boolean => |b| if (b) 1 else 0,
@@ -2663,7 +2669,13 @@ pub const Interpreter = struct {
             return .{ .string = try self.dup(buf[0..n]) };
         }
         if (std.mem.startsWith(u8, expr, "ascii(") and expr[expr.len - 1] == ')') {
-            const v = try self.evalExpr(expr[6 .. expr.len - 1]);
+            const argument = std.mem.trim(u8, expr[6 .. expr.len - 1], " \t\r\n");
+            if (argument.len == 0) {
+                self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: invalid syntax (<string>, line 0)", .{self.current_line}));
+                self.eval_error = true;
+                return .none;
+            }
+            const v = try self.evalExpr(argument);
             if (v == .string) {
                 const count = try self.lengthOf(v);
                 if (count != 1) {
