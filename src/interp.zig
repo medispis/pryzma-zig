@@ -2593,11 +2593,14 @@ pub const Interpreter = struct {
                 return .none;
             }
             const a = try self.splitArgs(argument);
-            if (a.len == 2) {
-                const lo = value.asInt(try self.evalExpr(a[0])) orelse 0;
-                const hi = value.asInt(try self.evalExpr(a[1])) orelse lo;
-                return .{ .int = lo + @mod(@as(i64, rand()), @max(hi - lo + 1, 1)) };
+            if (a.len < 2) {
+                self.runtimeError(12, try std.fmt.allocPrint(self.allocator, "Error at line {d}: list index out of range", .{self.current_line}));
+                self.eval_error = true;
+                return .none;
             }
+            const lo = value.asInt(try self.evalExpr(a[0])) orelse 0;
+            const hi = value.asInt(try self.evalExpr(a[1])) orelse lo;
+            return .{ .int = lo + @mod(@as(i64, rand()), @max(hi - lo + 1, 1)) };
         }
         if (findTopLevel(expr, "{")) |brace| {
             const struct_name = std.mem.trim(u8, expr[0..brace], " \t");
