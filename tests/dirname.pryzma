@@ -1,3 +1,9 @@
 print dirname("tests/lists_test.pryzma")
 print "|"
 print dirname("lists_test.pryzma")
+print "|"
+print dirname("tests/")
+print "|"
+print dirname("/foo/")
+print "|"
+print dirname("/")

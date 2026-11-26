@@ -2181,6 +2181,11 @@ pub const Interpreter = struct {
         if (std.mem.startsWith(u8, expr, "dirname(") and isWholeCall(expr, "dirname")) {
             const path = try self.evalExpr(expr[8 .. expr.len - 1]);
             if (path == .string) {
+                if (std.mem.endsWith(u8, path.string, "/")) {
+                    const trimmed = std.mem.trimEnd(u8, path.string, "/");
+                    if (trimmed.len == 0) return .{ .string = "/" };
+                    return .{ .string = trimmed };
+                }
                 return .{ .string = std.fs.path.dirname(path.string) orelse "" };
             }
         }
