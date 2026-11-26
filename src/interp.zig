@@ -2089,13 +2089,22 @@ pub const Interpreter = struct {
             }
             const haystack = try self.evalExpr(a[0]);
             const needle = try self.evalExpr(a[1]);
-            return .{ .boolean = switch (haystack) {
-                .list => |l| l.indexOf(needle) != null,
-                .tuple => |l| l.indexOf(needle) != null,
-                .string => |s| needle == .string and std.mem.indexOf(u8, s, needle.string) != null,
-                .dict => |d| d.indexOf(needle) != null,
-                else => false,
-            } };
+            switch (haystack) {
+                .list => |l| return .{ .boolean = l.indexOf(needle) != null },
+                .tuple => |l| return .{ .boolean = l.indexOf(needle) != null },
+                .dict => |d| return .{ .boolean = d.indexOf(needle) != null },
+                .string => |s| {
+                    if (needle != .string) {
+                        self.runtimeError(21, try std.fmt.allocPrint(self.allocator, "in() function error at line {d}: 'in <string>' requires string as left operand, not {s}", .{ self.current_line, value.typeName(needle) }));
+                        return .none;
+                    }
+                    return .{ .boolean = std.mem.indexOf(u8, s, needle.string) != null };
+                },
+                else => {
+                    self.runtimeError(21, try std.fmt.allocPrint(self.allocator, "in() function error at line {d}: argument of type '{s}' is not a container or iterable", .{ self.current_line, value.typeName(haystack) }));
+                    return .none;
+                },
+            }
         }
         if (std.mem.startsWith(u8, expr, "splitby(") and expr[expr.len - 1] == ')') {
             const a = try self.splitArgs(expr[8 .. expr.len - 1]);

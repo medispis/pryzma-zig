@@ -1,0 +1,6 @@
+print in(1, 2)
+print "after int"
+print in("x", 2)
+print "after string"
+items = [1, 2]
+print in(items, 2)
